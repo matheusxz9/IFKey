@@ -1,0 +1,106 @@
+@startuml
+title IFKey - Diagrama de Casos de Uso
+
+left to right direction
+
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+    BackgroundColor #E8F5E9
+    BorderColor #2E7D32
+    ArrowColor #424242
+}
+skinparam package {
+    BackgroundColor #F8F9FA
+    BorderColor #2E7D32
+}
+
+' =========================
+' ATORES
+' =========================
+
+actor "Administrador\n(Apoio)" as Admin
+
+actor "Aluno" as Aluno
+actor "Professor" as Professor
+actor "Servidor" as Servidor
+
+' Generalização dos solicitantes
+actor "Solicitante" as Solicitante
+
+Aluno -|> Solicitante
+Professor -|> Solicitante
+Servidor -|> Solicitante
+
+' =========================
+' SISTEMA
+' =========================
+
+rectangle "IFKey\nSistema de Reserva e Gestão de Chaves" {
+
+    usecase "Consultar disponibilidade\nde chaves" as UC1
+
+    usecase "Registrar empréstimo\nde chave" as UC2
+
+    usecase "Identificar solicitante" as UC3
+
+    usecase "Registrar dados do\nempréstimo" as UC4
+
+    usecase "Selecionar chave" as UC5
+
+    usecase "Registrar data e hora" as UC6
+
+    usecase "Atualizar status da chave\npara 'Emprestada'" as UC7
+
+    usecase "Registrar devolução\nda chave" as UC8
+
+    usecase "Atualizar status da chave\npara 'Disponível'" as UC9
+
+    usecase "Consultar empréstimos" as UC10
+
+    usecase "Consultar histórico\nde empréstimos" as UC11
+
+    usecase "Gerenciar chaves" as UC12
+
+    usecase "Cadastrar chave" as UC13
+
+    usecase "Editar chave" as UC14
+
+    usecase "Remover chave" as UC15
+}
+
+' =========================
+' ADMINISTRADOR
+' =========================
+
+Admin --> UC1
+Admin --> UC2
+Admin --> UC8
+Admin --> UC10
+Admin --> UC11
+Admin --> UC12
+
+' =========================
+' SOLICITANTE
+' =========================
+
+' O solicitante solicita a chave ao administrador
+Solicitante --> Admin
+
+' =========================
+' RELACIONAMENTOS
+' =========================
+
+UC2 ..> UC3 : <<include>>
+UC2 ..> UC4 : <<include>>
+UC2 ..> UC5 : <<include>>
+UC2 ..> UC6 : <<include>>
+UC2 ..> UC7 : <<include>>
+
+UC8 ..> UC9 : <<include>>
+
+UC12 ..> UC13 : <<include>>
+UC12 ..> UC14 : <<include>>
+UC12 ..> UC15 : <<include>>
+
+@enduml
