@@ -4,6 +4,6 @@ import { ChavesService } from './chaves.service';
 
 @Module({
   controllers: [ChavesController],
-  providers: [ChavesService]
+  providers: [ChavesService],
 })
 export class ChavesModule {}
