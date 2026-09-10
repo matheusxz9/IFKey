@@ -1,0 +1,131 @@
+@startuml
+' =====================================================
+' DER — Sistema de Empréstimo de Chaves
+' =====================================================
+
+!theme plain
+hide methods
+hide stereotypes
+skinparam linetype ortho
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam entity {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  FontColor #0F172A
+  AttributeFontColor #1E293B
+  PrimaryKeyColor #92400E
+  PrimaryKeyFontColor #92400E
+}
+
+' -----------------------------------------------------
+' Entidades
+' -----------------------------------------------------
+
+entity CHAVE {
+  * id_chave : INT <<PK>>
+  --
+  * codigo : VARCHAR(30) <<UK>>
+  descricao : VARCHAR(120)
+  localizacao : VARCHAR(120)
+  * status : VARCHAR(20)
+  data_cadastro : DATETIME
+  * ativo : BOOLEAN
+  --
+  constraint CK_CHAVE_STATUS {
+    status IN ('DISPONIVEL', 'EMPRESTADA')
+  }
+}
+
+entity ADMINISTRADOR {
+  * id_usuario : INT <<PK>>
+  --
+  * nome : VARCHAR(120)
+  * login : VARCHAR(80) <<UK>>
+  * perfil : VARCHAR(20)
+  * ativo : BOOLEAN
+  --
+  constraint CK_ADMIN_PERFIL {
+    perfil = 'ADMINISTRADOR'
+  }
+}
+
+entity SOLICITANTE {
+  * id_solicitante : INT <<PK>>
+  --
+  * nome : VARCHAR(120)
+  * tipo : VARCHAR(20)
+  * matricula : VARCHAR(30) <<UK>>
+  contato : VARCHAR(120)
+  * ativo : BOOLEAN
+  --
+  constraint CK_SOLICITANTE_TIPO {
+    tipo IN ('ALUNO', 'PROFESSOR', 'SERVIDOR')
+  }
+}
+
+entity EMPRESTIMO {
+  * id_emprestimo : INT <<PK>>
+  --
+  * id_solicitante : INT <<FK>>
+  * id_chave : INT <<FK>>
+  * id_administrador_registro : INT <<FK>>
+  * data_hora_emprestimo : DATETIME
+  data_hora_devolucao : DATETIME
+  observacoes : VARCHAR(255)
+  * status : VARCHAR(20)
+  --
+  constraint CK_EMPRESTIMO_STATUS {
+    status IN ('EMPRESTADA', 'DEVOLVIDA')
+  }
+  constraint CK_EMPRESTIMO_DATAS {
+    data_hora_devolucao IS NULL
+    OR data_hora_devolucao >= data_hora_emprestimo
+  }
+}
+
+' -----------------------------------------------------
+' Relacionamentos
+' -----------------------------------------------------
+
+SOLICITANTE ||--o{ EMPRESTIMO : solicita
+CHAVE ||--o{ EMPRESTIMO : "é utilizada em"
+ADMINISTRADOR ||--o{ EMPRESTIMO : registra
+
+' -----------------------------------------------------
+' Regras de negócio
+' -----------------------------------------------------
+
+note right of CHAVE
+  • codigo é único
+  • status pode ser:
+    DISPONIVEL ou EMPRESTADA
+  • ativo indica se a chave
+    está disponível no cadastro
+end note
+
+note right of SOLICITANTE
+  • matricula é única
+  • tipo pode ser:
+    ALUNO, PROFESSOR ou SERVIDOR
+  • apenas solicitantes ativos
+    devem realizar empréstimos
+end note
+
+note right of EMPRESTIMO
+  • todo empréstimo possui:
+    - um solicitante
+    - uma chave
+    - um administrador responsável
+  • devolução pode estar pendente
+  • a data de devolução não pode
+    ser anterior à data do empréstimo
+  • status pode ser:
+    EMPRESTADA ou DEVOLVIDA
+end note
+
+note "Regras de integridade recomendadas:\n\n1. Uma chave não deve possuir mais de um empréstimo ativo simultaneamente.\n2. Ao registrar um empréstimo, CHAVE.status deve ser EMPRESTADA.\n3. Ao registrar a devolução, CHAVE.status deve voltar para DISPONIVEL.\n4. Ao registrar a devolução, EMPRESTIMO.status deve ser DEVOLVIDA.\n5. Registros inativos não devem ser usados em novos empréstimos." as REGRAS
+
+REGRAS .. EMPRESTIMO
+
+@enduml
