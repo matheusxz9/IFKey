@@ -4,6 +4,6 @@ import { EmprestimosService } from './emprestimos.service';
 
 @Module({
   controllers: [EmprestimosController],
-  providers: [EmprestimosService]
+  providers: [EmprestimosService],
 })
 export class EmprestimosModule {}
