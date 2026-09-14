@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Emprestimo } from '../emprestimos/emprestimo.entity';
+import { StatusChave } from '../common/enums/status-chave.enum';
 
 @Entity('chave')
 export class Chave {
@@ -21,8 +22,8 @@ export class Chave {
   @Column({ length: 120, nullable: true })
   localizacao: string;
 
-  @Column({ length: 20, default: 'DISPONIVEL' })
-  status: string;
+  @Column({ type: 'varchar', length: 20, default: 'DISPONIVEL' })
+  status: StatusChave;
 
   @CreateDateColumn({ name: 'data_cadastro' })
   dataCadastro: Date;

@@ -9,6 +9,7 @@ import {
 import { Administrador } from '../administradores/administrador.entity';
 import { Chave } from '../chaves/chave.entity';
 import { Solicitante } from '../solicitantes/solicitante.entity';
+import { StatusEmprestimo } from '../common/enums/status-emprestimo.enum';
 
 @Entity('emprestimo')
 export class Emprestimo {
@@ -36,6 +37,6 @@ export class Emprestimo {
   @Column({ length: 255, nullable: true })
   observacoes: string;
 
-  @Column({ length: 20, default: 'EMPRESTADA' })
-  status: string;
+  @Column({ type: 'varchar', length: 20, default: 'EMPRESTADA' })
+  status: StatusEmprestimo;
 }

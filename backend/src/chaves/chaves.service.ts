@@ -1,50 +1,39 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Chave } from './chave.entity';
 import { CriarChaveDto } from './dto/criar-chave.dto';
 import { AtualizarChaveDto } from './dto/atualizar-chave.dto';
 import { ListarChavesQueryDto } from './dto/listar-chaves.query.dto';
 import {
-  ChaveIndisponivelException,
   CodigoChaveDuplicadoException,
   NaoEncontradoException,
 } from '../common/exceptions/app.exception';
 import { StatusChave } from '../common/enums/status-chave.enum';
 
-export interface Chave {
-  id: number;
-  codigo: string;
-  descricao: string;
-  localizacao: string;
-  status: StatusChave;
-  dataCadastro: string;
-  ativo: boolean;
-}
-
 @Injectable()
 export class ChavesService {
-  private chaves: Chave[] = [];
-  private proximoId = 1;
+  constructor(
+    @InjectRepository(Chave)
+    private readonly repo: Repository<Chave>,
+  ) {}
 
-  listar(query: ListarChavesQueryDto) {
-    let resultado = this.chaves.filter(
-      (c) => c.ativo === (query.ativo ?? true),
-    );
+  async listar(query: ListarChavesQueryDto) {
+    const qb = this.repo.createQueryBuilder('c');
+    qb.where('c.ativo = :ativo', { ativo: query.ativo ?? true });
     const status = query.status;
     if (status) {
-      resultado = resultado.filter((c) => c.status === status);
+      qb.andWhere('c.status = :status', { status });
     }
     const busca = query.busca;
     if (busca) {
-      const termo = busca.toLowerCase();
-      resultado = resultado.filter(
-        (c) =>
-          c.codigo.toLowerCase().includes(termo) ||
-          c.descricao.toLowerCase().includes(termo) ||
-          c.localizacao.toLowerCase().includes(termo),
+      qb.andWhere(
+        '(LOWER(c.codigo) LIKE LOWER(:termo) OR LOWER(c.descricao) LIKE LOWER(:termo) OR LOWER(c.localizacao) LIKE LOWER(:termo))',
+        { termo: `%${busca}%` },
       );
     }
-    const total = resultado.length;
-    const inicio = (query.page - 1) * query.limit;
-    const data = resultado.slice(inicio, inicio + query.limit);
+    qb.skip((query.page - 1) * query.limit).take(query.limit);
+    const [data, total] = await qb.getManyAndCount();
     return {
       data,
       meta: {
@@ -56,72 +45,58 @@ export class ChavesService {
     };
   }
 
-  buscar(id: number): Chave {
-    const chave = this.chaves.find((c) => c.id === id && c.ativo);
+  async buscar(id: number): Promise<Chave> {
+    const chave = await this.repo.findOne({ where: { id, ativo: true } });
     if (!chave) {
       throw new NaoEncontradoException('Chave não encontrada.');
     }
     return chave;
   }
 
-  buscarMesmoInativo(id: number): Chave {
-    const chave = this.chaves.find((c) => c.id === id);
+  async buscarMesmoInativo(id: number): Promise<Chave> {
+    const chave = await this.repo.findOne({ where: { id } });
     if (!chave) {
       throw new NaoEncontradoException('Chave não encontrada.');
     }
     return chave;
   }
 
-  criar(dto: CriarChaveDto): Chave {
-    const duplicada = this.chaves.some(
-      (c) => c.codigo.toLowerCase() === dto.codigo.toLowerCase(),
-    );
+  async criar(dto: CriarChaveDto): Promise<Chave> {
+    const duplicada = await this.repo
+      .createQueryBuilder('c')
+      .where('LOWER(c.codigo) = LOWER(:codigo)', { codigo: dto.codigo })
+      .getOne();
     if (duplicada) {
       throw new CodigoChaveDuplicadoException();
     }
-    const chave: Chave = {
-      id: this.proximoId++,
-      codigo: dto.codigo,
-      descricao: dto.descricao,
-      localizacao: dto.localizacao,
+    const chave = this.repo.create({
+      ...dto,
       status: StatusChave.DISPONIVEL,
-      dataCadastro: new Date().toISOString(),
       ativo: true,
-    };
-    this.chaves.push(chave);
-    return chave;
+    });
+    return this.repo.save(chave);
   }
 
-  atualizar(id: number, dto: AtualizarChaveDto): Chave {
-    const chave = this.buscarMesmoInativo(id);
+  async atualizar(id: number, dto: AtualizarChaveDto): Promise<Chave> {
+    const chave = await this.buscarMesmoInativo(id);
     const codigo = dto.codigo;
     if (codigo) {
-      const duplicada = this.chaves.some(
-        (c) => c.id !== id && c.codigo.toLowerCase() === codigo.toLowerCase(),
-      );
+      const duplicada = await this.repo
+        .createQueryBuilder('c')
+        .where('c.id != :id', { id })
+        .andWhere('LOWER(c.codigo) = LOWER(:codigo)', { codigo })
+        .getOne();
       if (duplicada) {
         throw new CodigoChaveDuplicadoException();
       }
     }
     Object.assign(chave, dto);
-    return chave;
+    return this.repo.save(chave);
   }
 
-  inativar(id: number): void {
-    const chave = this.buscar(id);
+  async inativar(id: number): Promise<void> {
+    const chave = await this.buscar(id);
     chave.ativo = false;
-  }
-
-  emprestar(id: number): void {
-    const chave = this.buscarMesmoInativo(id);
-    if (!chave.ativo || chave.status !== StatusChave.DISPONIVEL) {
-      throw new ChaveIndisponivelException();
-    }
-    chave.status = StatusChave.EMPRESTADA;
-  }
-
-  devolver(id: number): void {
-    const chave = this.buscarMesmoInativo(id);
-    chave.status = StatusChave.DISPONIVEL;
+    await this.repo.save(chave);
   }
 }
