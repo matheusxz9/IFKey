@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { SolicitantesController } from './solicitantes.controller';
 import { SolicitantesService } from './solicitantes.service';
 import { Solicitante } from './solicitante.entity';
+import { Emprestimo } from '../emprestimos/emprestimo.entity';
 
 describe('SolicitantesController', () => {
   let controller: SolicitantesController;
@@ -13,6 +14,7 @@ describe('SolicitantesController', () => {
       providers: [
         SolicitantesService,
         { provide: getRepositoryToken(Solicitante), useValue: {} },
+        { provide: getRepositoryToken(Emprestimo), useValue: {} },
       ],
     }).compile();
 

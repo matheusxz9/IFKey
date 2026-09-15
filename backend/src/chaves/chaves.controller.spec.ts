@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ChavesController } from './chaves.controller';
 import { ChavesService } from './chaves.service';
 import { Chave } from './chave.entity';
+import { Emprestimo } from '../emprestimos/emprestimo.entity';
 
 describe('ChavesController', () => {
   let controller: ChavesController;
@@ -13,6 +14,7 @@ describe('ChavesController', () => {
       providers: [
         ChavesService,
         { provide: getRepositoryToken(Chave), useValue: {} },
+        { provide: getRepositoryToken(Emprestimo), useValue: {} },
       ],
     }).compile();
 

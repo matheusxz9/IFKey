@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ChavesService } from './chaves.service';
 import { Chave } from './chave.entity';
+import { Emprestimo } from '../emprestimos/emprestimo.entity';
 
 describe('ChavesService', () => {
   let service: ChavesService;
@@ -11,6 +12,7 @@ describe('ChavesService', () => {
       providers: [
         ChavesService,
         { provide: getRepositoryToken(Chave), useValue: {} },
+        { provide: getRepositoryToken(Emprestimo), useValue: {} },
       ],
     }).compile();
 

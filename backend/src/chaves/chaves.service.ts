@@ -8,7 +8,10 @@ import { ListarChavesQueryDto } from './dto/listar-chaves.query.dto';
 import {
   CodigoChaveDuplicadoException,
   NaoEncontradoException,
+  RecursoComEmprestimoAtivoException,
 } from '../common/exceptions/app.exception';
+import { Emprestimo } from '../emprestimos/emprestimo.entity';
+import { StatusEmprestimo } from '../common/enums/status-emprestimo.enum';
 import { StatusChave } from '../common/enums/status-chave.enum';
 
 @Injectable()
@@ -16,6 +19,8 @@ export class ChavesService {
   constructor(
     @InjectRepository(Chave)
     private readonly repo: Repository<Chave>,
+    @InjectRepository(Emprestimo)
+    private readonly emprestimoRepo: Repository<Emprestimo>,
   ) {}
 
   async listar(query: ListarChavesQueryDto) {
@@ -96,6 +101,14 @@ export class ChavesService {
 
   async inativar(id: number): Promise<void> {
     const chave = await this.buscar(id);
+    const temEmprestimoAtivo = await this.emprestimoRepo.exists({
+      where: { chave: { id }, status: StatusEmprestimo.EMPRESTADA },
+    });
+    if (temEmprestimoAtivo) {
+      throw new RecursoComEmprestimoAtivoException(
+        'Chave não pode ser inativada: há empréstimo ativo.',
+      );
+    }
     chave.ativo = false;
     await this.repo.save(chave);
   }

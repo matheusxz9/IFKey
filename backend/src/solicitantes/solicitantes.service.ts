@@ -8,13 +8,18 @@ import { ListarSolicitantesQueryDto } from './dto/listar-solicitantes.query.dto'
 import {
   MatriculaDuplicadaException,
   NaoEncontradoException,
+  RecursoComEmprestimoAtivoException,
 } from '../common/exceptions/app.exception';
+import { Emprestimo } from '../emprestimos/emprestimo.entity';
+import { StatusEmprestimo } from '../common/enums/status-emprestimo.enum';
 
 @Injectable()
 export class SolicitantesService {
   constructor(
     @InjectRepository(Solicitante)
     private readonly repo: Repository<Solicitante>,
+    @InjectRepository(Emprestimo)
+    private readonly emprestimoRepo: Repository<Emprestimo>,
   ) {}
 
   async listar(query: ListarSolicitantesQueryDto) {
@@ -97,6 +102,14 @@ export class SolicitantesService {
 
   async inativar(id: number): Promise<void> {
     const solicitante = await this.buscar(id);
+    const temEmprestimoAtivo = await this.emprestimoRepo.exists({
+      where: { solicitante: { id }, status: StatusEmprestimo.EMPRESTADA },
+    });
+    if (temEmprestimoAtivo) {
+      throw new RecursoComEmprestimoAtivoException(
+        'Solicitante não pode ser inativado: há empréstimo ativo.',
+      );
+    }
     solicitante.ativo = false;
     await this.repo.save(solicitante);
   }
