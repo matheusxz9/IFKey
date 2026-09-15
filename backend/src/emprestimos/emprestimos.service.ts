@@ -27,7 +27,7 @@ export class EmprestimosService {
     private readonly solicitantesService: SolicitantesService,
   ) {}
 
-  async criar(dto: CriarEmprestimoDto) {
+  async criar(dto: CriarEmprestimoDto, adminId: number) {
     const solicitante = await this.solicitantesService.buscarMesmoInativo(
       dto.solicitanteId,
     );
@@ -41,6 +41,7 @@ export class EmprestimosService {
     const emprestimo = this.repo.create({
       solicitante: { id: dto.solicitanteId },
       chave: { id: dto.chaveId } as Chave,
+      administrador: { id: adminId },
       status: StatusEmprestimo.EMPRESTADA,
       observacoes: dto.observacoes,
     });

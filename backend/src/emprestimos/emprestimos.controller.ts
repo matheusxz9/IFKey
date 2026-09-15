@@ -7,23 +7,28 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { EmprestimosService } from './emprestimos.service';
 import { CriarEmprestimoDto } from './dto/criar-emprestimo.dto';
 import { DevolverEmprestimoDto } from './dto/devolver-emprestimo.dto';
 import { ListarEmprestimosQueryDto } from './dto/listar-emprestimos.query.dto';
 import { HistoricoEmprestimosQueryDto } from './dto/historico-emprestimos.query.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
 
 @Controller('emprestimos')
 export class EmprestimosController {
   constructor(private readonly emprestimosService: EmprestimosService) {}
 
   @Post()
-  criar(@Body() dto: CriarEmprestimoDto) {
-    return this.emprestimosService.criar(dto);
+  @UseGuards(JwtAuthGuard)
+  criar(@Body() dto: CriarEmprestimoDto, @CurrentUser() user: { id: number }) {
+    return this.emprestimosService.criar(dto, user.id);
   }
 
   @Patch(':id/devolucao')
+  @UseGuards(JwtAuthGuard)
   devolver(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: DevolverEmprestimoDto,

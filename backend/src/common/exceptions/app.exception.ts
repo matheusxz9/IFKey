@@ -55,3 +55,9 @@ export class NaoEncontradoException extends AppException {
     super(message, HttpStatus.NOT_FOUND, CodigoErro.NAO_ENCONTRADO);
   }
 }
+
+export class SemPermissaoException extends AppException {
+  constructor(message = 'Usuário sem permissão para esta ação.') {
+    super(message, HttpStatus.FORBIDDEN, CodigoErro.SEM_PERMISSAO);
+  }
+}

@@ -11,6 +11,7 @@ import { Administrador } from './administradores/administrador.entity';
 import { Solicitante } from './solicitantes/solicitante.entity';
 import { Chave } from './chaves/chave.entity';
 import { Emprestimo } from './emprestimos/emprestimo.entity';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { Emprestimo } from './emprestimos/emprestimo.entity';
     SolicitantesModule,
     ChavesModule,
     EmprestimosModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

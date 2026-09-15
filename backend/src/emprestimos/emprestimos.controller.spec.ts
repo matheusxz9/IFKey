@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { JwtService } from '@nestjs/jwt';
 import { EmprestimosController } from './emprestimos.controller';
 import { EmprestimosService } from './emprestimos.service';
 import { Emprestimo } from './emprestimo.entity';
@@ -17,6 +18,7 @@ describe('EmprestimosController', () => {
         { provide: getRepositoryToken(Emprestimo), useValue: {} },
         { provide: ChavesService, useValue: {} },
         { provide: SolicitantesService, useValue: {} },
+        { provide: JwtService, useValue: {} },
       ],
     }).compile();
 
