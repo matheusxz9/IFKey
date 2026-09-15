@@ -24,7 +24,8 @@
     "migration:revert": "npm run typeorm -- migration:revert",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f"
+    "docker:logs": "docker compose logs -f",
+    "seed": "ts-node src/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

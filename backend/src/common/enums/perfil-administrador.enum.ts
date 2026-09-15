@@ -1,3 +1,3 @@
-export enum TipoSolicitante {
+export enum PerfilAdministrador {
   ADMINISTRADOR = 'ADMINISTRADOR',
 }
