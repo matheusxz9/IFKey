@@ -23,6 +23,7 @@
     "migration:run": "npm run typeorm -- migration:run",
     "migration:revert": "npm run typeorm -- migration:revert",
     "admin:add": "ts-node src/scripts/adicionar-admin.ts",
+    "callback:test": "node scripts/callback-test.mjs",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
