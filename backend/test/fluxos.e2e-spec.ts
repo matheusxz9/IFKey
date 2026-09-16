@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
+import { App } from 'supertest/types';
 import jwt from 'jsonwebtoken';
 import { DataSource } from 'typeorm';
 import { AppModule } from './../src/app.module';
@@ -10,7 +11,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-para-teste';
 
 describe('Fluxos de negócio (e2e)', () => {
   let app: INestApplication;
-  let server: ReturnType<INestApplication['getHttpServer']>;
+  let server: App;
   let token: string;
 
   beforeAll(async () => {
@@ -29,7 +30,7 @@ describe('Fluxos de negócio (e2e)', () => {
       }),
     );
     await app.init();
-    server = app.getHttpServer();
+    server = app.getHttpServer() as App;
 
     const dataSource = app.get(DataSource);
     await dataSource.query(
