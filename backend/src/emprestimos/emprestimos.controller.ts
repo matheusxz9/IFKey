@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { EmprestimosService } from './emprestimos.service';
 import { CriarEmprestimoDto } from './dto/criar-emprestimo.dto';
 import { DevolverEmprestimoDto } from './dto/devolver-emprestimo.dto';
@@ -17,6 +18,7 @@ import { HistoricoEmprestimosQueryDto } from './dto/historico-emprestimos.query.
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 
+@ApiTags('emprestimos')
 @Controller('emprestimos')
 export class EmprestimosController {
   constructor(private readonly emprestimosService: EmprestimosService) {}
