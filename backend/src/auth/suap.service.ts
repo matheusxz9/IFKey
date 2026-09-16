@@ -18,6 +18,8 @@ export class SuapService {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly redirectUri: string;
+  private readonly mockAtivo: boolean;
+  private readonly mockLogin: string;
 
   constructor(private readonly configService: ConfigService) {
     this.baseUrl =
@@ -29,9 +31,15 @@ export class SuapService {
       '',
     );
     this.redirectUri = this.configService.get<string>('SUAP_REDIRECT_URI', '');
+    this.mockAtivo = this.configService.get<string>('AUTH_MOCK') === 'true';
+    this.mockLogin =
+      this.configService.get<string>('AUTH_MOCK_LOGIN') || 'matheus';
   }
 
   async trocarCodePorToken(code: string): Promise<string> {
+    if (this.mockAtivo) {
+      return 'mock-access-token';
+    }
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
@@ -52,6 +60,13 @@ export class SuapService {
   }
 
   async buscarUsuario(accessToken: string): Promise<UsuarioSuap> {
+    if (this.mockAtivo) {
+      return {
+        matricula: '0000000000',
+        nome_usual: 'Admin Mock',
+        vinculo: { login: this.mockLogin, matricula: '0000000000' },
+      };
+    }
     const response = await fetch(`${this.baseUrl}/api/eu/`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
