@@ -94,13 +94,6 @@ function LoginPage() {
             type="submit"
             disabled={carregando}
             className="w-full rounded-md bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700"
-          >
-            {carregando ? "Entrando..." : "Entrar"}
-          </button>
-          <button
-            type="button"
-            disabled={carregando}
-            className="w-full rounded-md bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700"
             onClick={() => loginSuap()}
           >
             {carregando ? "Entrando..." : "Entrar via Suap"}
