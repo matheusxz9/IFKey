@@ -10,11 +10,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { SolicitantesService } from './solicitantes.service';
 import { CriarSolicitanteDto } from './dto/criar-solicitante.dto';
 import { AtualizarSolicitanteDto } from './dto/atualizar-solicitante.dto';
 import { ListarSolicitantesQueryDto } from './dto/listar-solicitantes.query.dto';
 
+@ApiTags('solicitantes')
 @Controller('solicitantes')
 export class SolicitantesController {
   constructor(private readonly solicitantesService: SolicitantesService) {}

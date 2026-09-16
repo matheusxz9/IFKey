@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { JwtService } from '@nestjs/jwt';
 import { EmprestimosController } from './emprestimos.controller';
 import { EmprestimosService } from './emprestimos.service';
+import { Emprestimo } from './emprestimo.entity';
 import { ChavesService } from '../chaves/chaves.service';
 import { SolicitantesService } from '../solicitantes/solicitantes.service';
 
@@ -10,7 +13,13 @@ describe('EmprestimosController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [EmprestimosController],
-      providers: [EmprestimosService, ChavesService, SolicitantesService],
+      providers: [
+        EmprestimosService,
+        { provide: getRepositoryToken(Emprestimo), useValue: {} },
+        { provide: ChavesService, useValue: {} },
+        { provide: SolicitantesService, useValue: {} },
+        { provide: JwtService, useValue: {} },
+      ],
     }).compile();
 
     controller = module.get<EmprestimosController>(EmprestimosController);

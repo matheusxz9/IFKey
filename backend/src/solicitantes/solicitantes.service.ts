@@ -1,47 +1,44 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Solicitante } from './solicitante.entity';
 import { CriarSolicitanteDto } from './dto/criar-solicitante.dto';
 import { AtualizarSolicitanteDto } from './dto/atualizar-solicitante.dto';
 import { ListarSolicitantesQueryDto } from './dto/listar-solicitantes.query.dto';
 import {
   MatriculaDuplicadaException,
   NaoEncontradoException,
+  RecursoComEmprestimoAtivoException,
 } from '../common/exceptions/app.exception';
-import { TipoSolicitante } from '../common/enums/tipo-solicitante.enum';
-
-export interface Solicitante {
-  id: number;
-  nome: string;
-  tipo: TipoSolicitante;
-  matricula: string;
-  contato: string;
-  ativo: boolean;
-}
+import { Emprestimo } from '../emprestimos/emprestimo.entity';
+import { StatusEmprestimo } from '../common/enums/status-emprestimo.enum';
 
 @Injectable()
 export class SolicitantesService {
-  private solicitantes: Solicitante[] = [];
-  private proximoId = 1;
+  constructor(
+    @InjectRepository(Solicitante)
+    private readonly repo: Repository<Solicitante>,
+    @InjectRepository(Emprestimo)
+    private readonly emprestimoRepo: Repository<Emprestimo>,
+  ) {}
 
-  listar(query: ListarSolicitantesQueryDto) {
-    let resultado = this.solicitantes.filter(
-      (s) => s.ativo === (query.ativo ?? true),
-    );
+  async listar(query: ListarSolicitantesQueryDto) {
+    const qb = this.repo.createQueryBuilder('s');
+    qb.where('s.ativo = :ativo', { ativo: query.ativo ?? true });
     const nome = query.nome;
     if (nome) {
-      const termo = nome.toLowerCase();
-      resultado = resultado.filter((s) => s.nome.toLowerCase().includes(termo));
+      qb.andWhere('LOWER(s.nome) LIKE LOWER(:nome)', { nome: `%${nome}%` });
     }
     const matricula = query.matricula;
     if (matricula) {
-      resultado = resultado.filter((s) => s.matricula === matricula);
+      qb.andWhere('s.matricula = :matricula', { matricula });
     }
     const tipo = query.tipo;
     if (tipo) {
-      resultado = resultado.filter((s) => s.tipo === tipo);
+      qb.andWhere('s.tipo = :tipo', { tipo });
     }
-    const total = resultado.length;
-    const inicio = (query.page - 1) * query.limit;
-    const data = resultado.slice(inicio, inicio + query.limit);
+    qb.skip((query.page - 1) * query.limit).take(query.limit);
+    const [data, total] = await qb.getManyAndCount();
     return {
       data,
       meta: {
@@ -53,56 +50,67 @@ export class SolicitantesService {
     };
   }
 
-  buscar(id: number): Solicitante {
-    const solicitante = this.solicitantes.find((s) => s.id === id && s.ativo);
+  async buscar(id: number): Promise<Solicitante> {
+    const solicitante = await this.repo.findOne({ where: { id, ativo: true } });
     if (!solicitante) {
       throw new NaoEncontradoException('Solicitante não encontrado.');
     }
     return solicitante;
   }
 
-  buscarMesmoInativo(id: number): Solicitante {
-    const solicitante = this.solicitantes.find((s) => s.id === id);
+  async buscarMesmoInativo(id: number): Promise<Solicitante> {
+    const solicitante = await this.repo.findOne({ where: { id } });
     if (!solicitante) {
       throw new NaoEncontradoException('Solicitante não encontrado.');
     }
     return solicitante;
   }
 
-  criar(dto: CriarSolicitanteDto): Solicitante {
-    const duplicada = this.solicitantes.some(
-      (s) => s.matricula.toLowerCase() === dto.matricula.toLowerCase(),
-    );
+  async criar(dto: CriarSolicitanteDto): Promise<Solicitante> {
+    const duplicada = await this.repo
+      .createQueryBuilder('s')
+      .where('LOWER(s.matricula) = LOWER(:matricula)', {
+        matricula: dto.matricula,
+      })
+      .getOne();
     if (duplicada) {
       throw new MatriculaDuplicadaException();
     }
-    const solicitante: Solicitante = {
-      id: this.proximoId++,
-      ...dto,
-      ativo: true,
-    };
-    this.solicitantes.push(solicitante);
-    return solicitante;
+    const solicitante = this.repo.create({ ...dto, ativo: true });
+    return this.repo.save(solicitante);
   }
 
-  atualizar(id: number, dto: AtualizarSolicitanteDto): Solicitante {
-    const solicitante = this.buscarMesmoInativo(id);
+  async atualizar(
+    id: number,
+    dto: AtualizarSolicitanteDto,
+  ): Promise<Solicitante> {
+    const solicitante = await this.buscarMesmoInativo(id);
     const matricula = dto.matricula;
     if (matricula) {
-      const duplicada = this.solicitantes.some(
-        (s) =>
-          s.id !== id && s.matricula.toLowerCase() === matricula.toLowerCase(),
-      );
+      const duplicada = await this.repo
+        .createQueryBuilder('s')
+        .where('s.id != :id', { id })
+        .andWhere('LOWER(s.matricula) = LOWER(:matricula)', { matricula })
+        .getOne();
       if (duplicada) {
         throw new MatriculaDuplicadaException();
       }
     }
     Object.assign(solicitante, dto);
-    return solicitante;
+    return this.repo.save(solicitante);
   }
 
-  inativar(id: number): void {
-    const solicitante = this.buscar(id);
+  async inativar(id: number): Promise<void> {
+    const solicitante = await this.buscar(id);
+    const temEmprestimoAtivo = await this.emprestimoRepo.exists({
+      where: { solicitante: { id }, status: StatusEmprestimo.EMPRESTADA },
+    });
+    if (temEmprestimoAtivo) {
+      throw new RecursoComEmprestimoAtivoException(
+        'Solicitante não pode ser inativado: há empréstimo ativo.',
+      );
+    }
     solicitante.ativo = false;
+    await this.repo.save(solicitante);
   }
 }

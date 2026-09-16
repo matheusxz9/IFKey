@@ -10,11 +10,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { ChavesService } from './chaves.service';
 import { CriarChaveDto } from './dto/criar-chave.dto';
 import { AtualizarChaveDto } from './dto/atualizar-chave.dto';
 import { ListarChavesQueryDto } from './dto/listar-chaves.query.dto';
 
+@ApiTags('chaves')
 @Controller('chaves')
 export class ChavesController {
   constructor(private readonly chavesService: ChavesService) {}

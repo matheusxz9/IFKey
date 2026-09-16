@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Emprestimo } from './emprestimo.entity';
+import { Chave } from '../chaves/chave.entity';
 import { CriarEmprestimoDto } from './dto/criar-emprestimo.dto';
 import { DevolverEmprestimoDto } from './dto/devolver-emprestimo.dto';
 import { ListarEmprestimosQueryDto } from './dto/listar-emprestimos.query.dto';
@@ -6,89 +10,89 @@ import { HistoricoEmprestimosQueryDto } from './dto/historico-emprestimos.query.
 import { ChavesService } from '../chaves/chaves.service';
 import { SolicitantesService } from '../solicitantes/solicitantes.service';
 import {
+  ChaveIndisponivelException,
   EmprestimoJaDevolvidoException,
   NaoEncontradoException,
   SolicitanteInativoException,
 } from '../common/exceptions/app.exception';
+import { StatusChave } from '../common/enums/status-chave.enum';
 import { StatusEmprestimo } from '../common/enums/status-emprestimo.enum';
-
-export interface Emprestimo {
-  id: number;
-  solicitanteId: number;
-  chaveId: number;
-  dataHoraEmprestimo: string;
-  dataHoraDevolucao: string | null;
-  status: StatusEmprestimo;
-  observacoes?: string;
-}
 
 @Injectable()
 export class EmprestimosService {
-  private emprestimos: Emprestimo[] = [];
-  private proximoId = 1;
-
   constructor(
+    @InjectRepository(Emprestimo)
+    private readonly repo: Repository<Emprestimo>,
     private readonly chavesService: ChavesService,
     private readonly solicitantesService: SolicitantesService,
   ) {}
 
-  criar(dto: CriarEmprestimoDto): Emprestimo {
-    const solicitante = this.solicitantesService.buscarMesmoInativo(
+  async criar(dto: CriarEmprestimoDto, adminId: number) {
+    const solicitante = await this.solicitantesService.buscarMesmoInativo(
       dto.solicitanteId,
     );
     if (!solicitante.ativo) {
       throw new SolicitanteInativoException();
     }
-    this.chavesService.buscarMesmoInativo(dto.chaveId);
-    this.chavesService.emprestar(dto.chaveId);
-    const emprestimo: Emprestimo = {
-      id: this.proximoId++,
-      solicitanteId: dto.solicitanteId,
-      chaveId: dto.chaveId,
-      dataHoraEmprestimo: new Date().toISOString(),
-      dataHoraDevolucao: null,
+    const chave = await this.chavesService.buscarMesmoInativo(dto.chaveId);
+    if (!chave.ativo || chave.status !== StatusChave.DISPONIVEL) {
+      throw new ChaveIndisponivelException();
+    }
+    const emprestimo = this.repo.create({
+      solicitante: { id: dto.solicitanteId },
+      chave: { id: dto.chaveId } as Chave,
+      administrador: { id: adminId },
       status: StatusEmprestimo.EMPRESTADA,
       observacoes: dto.observacoes,
-    };
-    this.emprestimos.push(emprestimo);
-    return emprestimo;
+    });
+    await this.repo.manager.transaction(async (manager) => {
+      const salvo = await manager.save(emprestimo);
+      await manager.update(Chave, dto.chaveId, {
+        status: StatusChave.EMPRESTADA,
+      });
+      return salvo;
+    });
+    return this.toResponse(await this.buscarEntidade(emprestimo.id));
   }
 
-  devolver(id: number, dto: DevolverEmprestimoDto): Emprestimo {
-    const emprestimo = this.buscar(id);
+  async devolver(id: number, dto: DevolverEmprestimoDto) {
+    const emprestimo = await this.buscarEntidade(id);
     if (emprestimo.status === StatusEmprestimo.DEVOLVIDA) {
       throw new EmprestimoJaDevolvidoException();
     }
-    emprestimo.status = StatusEmprestimo.DEVOLVIDA;
-    emprestimo.dataHoraDevolucao = new Date().toISOString();
-    if (dto.observacoes) {
-      emprestimo.observacoes = dto.observacoes;
-    }
-    this.chavesService.devolver(emprestimo.chaveId);
-    return emprestimo;
+    await this.repo.manager.transaction(async (manager) => {
+      await manager.update(Emprestimo, id, {
+        status: StatusEmprestimo.DEVOLVIDA,
+        dataHoraDevolucao: new Date(),
+        ...(dto.observacoes ? { observacoes: dto.observacoes } : {}),
+      });
+      await manager.update(Chave, emprestimo.chave.id, {
+        status: StatusChave.DISPONIVEL,
+      });
+    });
+    return this.toResponse(await this.buscarEntidade(id));
   }
 
-  listar(query: ListarEmprestimosQueryDto) {
-    let resultado = [...this.emprestimos].sort((a, b) =>
-      b.dataHoraEmprestimo.localeCompare(a.dataHoraEmprestimo),
-    );
-    const status = query.status;
-    if (status) {
-      resultado = resultado.filter((e) => e.status === status);
-    }
-    const solicitanteId = query.solicitanteId;
-    if (solicitanteId) {
-      resultado = resultado.filter((e) => e.solicitanteId === solicitanteId);
-    }
-    const chaveId = query.chaveId;
-    if (chaveId) {
-      resultado = resultado.filter((e) => e.chaveId === chaveId);
-    }
-    const total = resultado.length;
-    const inicio = (query.page - 1) * query.limit;
-    const data = resultado.slice(inicio, inicio + query.limit);
+  async listar(query: ListarEmprestimosQueryDto) {
+    const [data, total] = await this.repo.findAndCount({
+      where: {
+        ...(query.status ? { status: query.status } : {}),
+        ...(query.solicitanteId
+          ? { solicitante: { id: query.solicitanteId } }
+          : {}),
+        ...(query.chaveId ? { chave: { id: query.chaveId } } : {}),
+      },
+      relations: {
+        solicitante: true,
+        chave: true,
+        administrador: true,
+      },
+      order: { dataHoraEmprestimo: 'DESC' },
+      skip: (query.page - 1) * query.limit,
+      take: query.limit,
+    });
     return {
-      data,
+      data: data.map((e) => this.toResponse(e)),
       meta: {
         page: query.page,
         limit: query.limit,
@@ -98,40 +102,34 @@ export class EmprestimosService {
     };
   }
 
-  historico(query: HistoricoEmprestimosQueryDto) {
-    let resultado = this.emprestimos.filter(
-      (e) => e.status === StatusEmprestimo.DEVOLVIDA,
-    );
+  async historico(query: HistoricoEmprestimosQueryDto) {
+    const qb = this.repo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.solicitante', 's')
+      .leftJoinAndSelect('e.chave', 'c')
+      .leftJoinAndSelect('e.administrador', 'a')
+      .where('e.status = :status', { status: StatusEmprestimo.DEVOLVIDA })
+      .orderBy('e.dataHoraDevolucao', 'DESC');
     const de = query.de;
     if (de) {
-      const dataDe = new Date(de);
-      resultado = resultado.filter(
-        (e) => new Date(e.dataHoraDevolucao ?? 0) >= dataDe,
-      );
+      qb.andWhere('e.dataHoraDevolucao >= :de', { de: new Date(de) });
     }
     const ate = query.ate;
     if (ate) {
-      const dataAte = new Date(ate);
-      resultado = resultado.filter(
-        (e) => new Date(e.dataHoraDevolucao ?? 0) <= dataAte,
-      );
+      qb.andWhere('e.dataHoraDevolucao <= :ate', { ate: new Date(ate) });
     }
     const solicitanteId = query.solicitanteId;
     if (solicitanteId) {
-      resultado = resultado.filter((e) => e.solicitanteId === solicitanteId);
+      qb.andWhere('e.solicitante = :solicitanteId', { solicitanteId });
     }
     const chaveId = query.chaveId;
     if (chaveId) {
-      resultado = resultado.filter((e) => e.chaveId === chaveId);
+      qb.andWhere('e.chave = :chaveId', { chaveId });
     }
-    resultado.sort((a, b) =>
-      (b.dataHoraDevolucao ?? '').localeCompare(a.dataHoraDevolucao ?? ''),
-    );
-    const total = resultado.length;
-    const inicio = (query.page - 1) * query.limit;
-    const data = resultado.slice(inicio, inicio + query.limit);
+    qb.skip((query.page - 1) * query.limit).take(query.limit);
+    const [data, total] = await qb.getManyAndCount();
     return {
-      data,
+      data: data.map((e) => this.toResponse(e)),
       meta: {
         page: query.page,
         limit: query.limit,
@@ -141,11 +139,50 @@ export class EmprestimosService {
     };
   }
 
-  buscar(id: number): Emprestimo {
-    const emprestimo = this.emprestimos.find((e) => e.id === id);
+  async buscar(id: number) {
+    return this.toResponse(await this.buscarEntidade(id));
+  }
+
+  private async buscarEntidade(id: number): Promise<Emprestimo> {
+    const emprestimo = await this.repo.findOne({
+      where: { id },
+      relations: {
+        solicitante: true,
+        chave: true,
+        administrador: true,
+      },
+    });
     if (!emprestimo) {
       throw new NaoEncontradoException('Empréstimo não encontrado.');
     }
     return emprestimo;
+  }
+
+  private toResponse(e: Emprestimo) {
+    return {
+      id: e.id,
+      solicitante: e.solicitante
+        ? {
+            id: e.solicitante.id,
+            nome: e.solicitante.nome,
+            matricula: e.solicitante.matricula,
+            tipo: e.solicitante.tipo,
+          }
+        : null,
+      chave: e.chave
+        ? {
+            id: e.chave.id,
+            codigo: e.chave.codigo,
+            descricao: e.chave.descricao,
+          }
+        : null,
+      administrador: e.administrador
+        ? { id: e.administrador.id, nome: e.administrador.nome }
+        : null,
+      dataHoraEmprestimo: e.dataHoraEmprestimo,
+      dataHoraDevolucao: e.dataHoraDevolucao,
+      status: e.status,
+      observacoes: e.observacoes,
+    };
   }
 }
