@@ -1,13 +1,13 @@
 services:
   api:
-    build: ./backend
+    build: .
     ports:
       - "3000:3000"
     volumes:
-      - .:/backend:/backend
-      - node_modules:/backend/node_modules
+      - .:/app
+      - node_modules:/app/node_modules
     env_file:
-      - backend/.env
+      - .env
     depends_on:
       - db
     command: npm run start:dev
@@ -15,12 +15,14 @@ services:
   db:
     image: postgres:16-alpine
     restart: always
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - db_data:/var/lib/postgresql/data  
 
