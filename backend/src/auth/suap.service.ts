@@ -1,19 +1,21 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-interface VinculoSuap {
-  login: string;
-  matricula: string;
-}
-
 export interface UsuarioSuap {
-  matricula: string;
-  nome_usual: string;
-  vinculo?: VinculoSuap;
+  identificacao?: string;
+  nome_usual?: string;
+  nome?: string;
+  email_academico?: string;
+  email_google_classroom?: string;
+  email_secundario?: string;
+  campus?: string;
+  tipo_usuario?: string;
+  vinculo?: { login: string; matricula: string };
 }
 
 @Injectable()
 export class SuapService {
+  private readonly logger = new Logger(SuapService.name);
   private readonly baseUrl: string;
   private readonly clientId: string;
   private readonly clientSecret: string;
@@ -45,21 +47,40 @@ export class SuapService {
       body: params,
     });
     if (!response.ok) {
+      const corpo = await response.text();
+      this.logger.error(
+        `SUAP /o/token/ respondeu ${response.status}: ${corpo}`,
+      );
       throw new UnauthorizedException('Falha ao autenticar com o SUAP.');
     }
-    const data = (await response.json()) as { access_token: string };
+    const data = (await response.json()) as {
+      access_token: string;
+      scope?: string;
+      token_type?: string;
+    };
+    this.logger.log(
+      `Token SUAP obtido. scope="${data.scope ?? '?'}" tipo="${data.token_type ?? '?'}"`,
+    );
     return data.access_token;
   }
 
   async buscarUsuario(accessToken: string): Promise<UsuarioSuap> {
-    const response = await fetch(`${this.baseUrl}/api/eu/`, {
+    const response = await fetch(`${this.baseUrl}/api/rh/eu/`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!response.ok) {
+      const corpo = await response.text();
+      this.logger.error(
+        `SUAP /api/rh/eu/ respondeu ${response.status}: ${corpo.slice(0, 200)}`,
+      );
       throw new UnauthorizedException(
         'Falha ao buscar dados do usuário no SUAP.',
       );
     }
-    return (await response.json()) as UsuarioSuap;
+    const usuario = (await response.json()) as UsuarioSuap;
+    this.logger.log(
+      `SUAP /api/rh/eu/ OK: login="${usuario.email_academico?.split('@')[0] ?? '?'}"`,
+    );
+    return usuario;
   }
 }

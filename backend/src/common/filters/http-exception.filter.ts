@@ -4,6 +4,7 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { AppException } from '../exceptions/app.exception';
@@ -20,6 +21,8 @@ const STATUS_NAMES: Record<number, string> = {
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
 
@@ -55,6 +58,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return;
     }
 
+    this.logger.error(
+      `Erro inesperado: ${exception instanceof Error ? exception.message : String(exception)}`,
+      exception instanceof Error ? exception.stack : undefined,
+    );
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       error: STATUS_NAMES[HttpStatus.INTERNAL_SERVER_ERROR],
@@ -62,7 +69,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
       code: CodigoErro.ERRO_INTERNO,
     });
   }
-
   private getMessage(exception: HttpException): string | string[] {
     const responseBody = exception.getResponse();
     if (typeof responseBody === 'string') {
