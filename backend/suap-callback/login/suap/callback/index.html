@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>IFKey - Login SUAP (teste)</title>
+  <style>
+    body { font-family: sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    pre { background: #f4f4f4; padding: 12px; border-radius: 6px; overflow-x: auto; }
+    .ok { color: #1a7f37; font-weight: bold; }
+    .erro { color: #b42318; font-weight: bold; }
+    button { padding: 12px 18px; font-size: 16px; cursor: pointer; }
+    .btn-suap { background: #1a7f37; color: #fff; border: none; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Login SUAP — teste do IFKey</h1>
+
+  <div id="area-login" style="margin-bottom: 20px;">
+    <button class="btn-suap" onclick="window.location.href = authorizeUrl">Entrar com SUAP</button>
+  </div>
+
+  <div id="status">Nenhum code ainda — clique em "Entrar com SUAP" acima.</div>
+  <pre id="resultado"></pre>
+
+  <script>
+    const SUAP_CLIENT_ID = '__SUAP_CLIENT_ID__';
+    const SUAP_REDIRECT_URI = '__SUAP_REDIRECT_URI__';
+    const API_BASE = '__API_BASE__';
+
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+
+    const authorizeUrl =
+      'https://suap.ifrn.edu.br/o/authorize/?response_type=code' +
+      '&client_id=' + encodeURIComponent(SUAP_CLIENT_ID) +
+      '&scope=identificacao%20email' +
+      '&redirect_uri=' + encodeURIComponent(SUAP_REDIRECT_URI);
+
+    const status = document.getElementById('status');
+    const resultado = document.getElementById('resultado');
+
+    if (!code) {
+      status.className = 'erro';
+      status.textContent = 'Nenhum code na URL. Clique em "Entrar com SUAP" para começar o fluxo.';
+    } else {
+      status.textContent = 'Code recebido! Enviando para o backend...';
+      fetch(API_BASE + '/api/auth/suap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+        .then(async (res) => {
+          const body = await res.json();
+          resultado.textContent = JSON.stringify(body, null, 2);
+          if (res.ok) {
+            status.className = 'ok';
+            status.textContent = 'LOGIN OK! Token gerado. Copie o accessToken do JSON abaixo.';
+          } else {
+            status.className = 'erro';
+            status.textContent = 'Falha no login: ' + (body.message || res.status);
+          }
+        })
+        .catch((err) => {
+          status.className = 'erro';
+          status.textContent = 'Erro ao chamar o backend: ' + err.message;
+        });
+    }
+  </script>
+</body>
+</html>

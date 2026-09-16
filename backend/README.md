@@ -88,6 +88,30 @@ npm run start:dev
 
 A API responde em **http://localhost:3000/api** e a documentação Swagger em **http://localhost:3000/docs**.
 
+### 2.8 Subir a página de teste do login SUAP (opcional)
+
+Para testar o login sem o frontend, em outro terminal:
+
+```bash
+npm run callback:test
+```
+
+Serve a página de teste em **http://localhost:5173/login/suap/callback** (lê as credenciais do seu `.env`). Funciona em qualquer máquina: basta clonar o repo, ter o `.env` e rodar os comandos acima.
+
+---
+
+## 2.9 Checklist para rodar em OUTRA máquina (outro colega)
+
+1. `git clone` do repositório + `cd backend`
+2. `npm install`
+3. Copiar o `.env` com as credenciais (pedir ao time — fica fora do git)
+4. `docker compose up -d db`
+5. `npm run migration:run`
+6. `npm run seed`
+7. `npm run admin:add -- <login-do-suap> "<Nome>"` (cadastrar o próprio login)
+8. `npm run start:dev` + `npm run callback:test` (em terminais separados)
+9. Abrir `http://localhost:5173/login/suap/callback` → "Entrar com SUAP"
+
 ---
 
 ## 3. Testar as rotas
