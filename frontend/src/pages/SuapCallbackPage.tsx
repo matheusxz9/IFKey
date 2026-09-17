@@ -36,7 +36,7 @@ function SuapCallbackPage() {
 
         localStorage.setItem("acessToken", dados.acessToken);
 
-        navigate("/");
+        navigate("/chaves");
       } catch (error) {
         setErro(
           error instanceof Error ? error.message : "Erro ao realizar o login.",

@@ -1,11 +1,35 @@
-import API_URL from "./api";
+import { apiFetch } from "./api";
+import type { ListaChavesResponse, StatusChave } from "../types/chave";
 
-export async function listarChaves() {
-  const resposta = await fetch(`${API_URL}/chaves`);
+interface ListarChavesParams {
+  busca?: string;
+  status?: StatusChave;
+  page?: number;
+  limit?: number;
+}
 
-  if (!resposta.ok) {
-    throw new Error("Erro ao buscar as chaves.");
+export async function listarChaves(
+  params: ListarChavesParams = {},
+): Promise<ListaChavesResponse> {
+  const query = new URLSearchParams();
+
+  if (params.busca) {
+    query.set("busca", params.busca);
   }
 
-  return resposta.json();
+  if (params.status) {
+    query.set("status", params.status);
+  }
+
+  if (params.page) {
+    query.set("page", String(params.page));
+  }
+
+  if (params.limit) {
+    query.set("limit", String(params.limit));
+  }
+
+  const queryString = query.toString();
+
+  return apiFetch(`/chaves${queryString ? `?${queryString}` : ""}`);
 }
