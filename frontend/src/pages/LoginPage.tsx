@@ -1,11 +1,18 @@
-import { useState } from "react";
 import logoIfkey from "../assets/logo-ifkey.png";
 
 function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [senha, setSenha] = useState("");
-  const [erro, setErro] = useState("");
-  const [carregando, setCarregando] = useState(false);
+  function entrarComSuap() {
+    const clientId = "n0TikZwb7KswC2Cvyb90K3ob4cZCQLnoJq4Hc8g8";
+    const redirectUri = "http://localhost:5173/login/suap/callback";
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      response_type: "code",
+      redirect_uri: redirectUri,
+    });
+
+    window.location.href = `https://suap.ifrn.edu.br/o/authorize/?${params.toString()}`;
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-950">
@@ -16,87 +23,17 @@ function LoginPage() {
           className="mx-auto mb-4 h-32 w-32 object-contain"
         />
 
-        <p className="mb-6 text-center text-gray-400">
+        <p className="mb-8 text-center text-gray-400">
           Acesso do Administrador
         </p>
 
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-
-            if (!email) {
-              setErro("O e-mail é obrigatório.");
-              return;
-            }
-
-            if (!senha) {
-              setErro("A senha é obrigatória.");
-              return;
-            }
-
-            if (!email || !senha) {
-              setErro("Preencha todos os campos.");
-              return;
-            }
-
-            setErro("");
-            setCarregando(true);
-
-            setTimeout(() => {
-              setCarregando(false);
-            }, 1000);
-          }}
+        <button
+          type="button"
+          onClick={entrarComSuap}
+          className="w-full rounded-md bg-green-600 px-4 py-3 font-semibold text-white hover:bg-green-700 cursor-pointer"
         >
-          <div>
-            <label
-              htmlFor="email"
-              className="mb-1 block text-sm font-medium text-gray-300"
-            >
-              E-mail
-            </label>
-
-            <input
-              id="email"
-              type="email"
-              placeholder="Digite seu e-mail"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white outline-none placeholder:text-gray-500 focus:border-green-500"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-1 block text-sm font-medium text-gray-300"
-            >
-              Senha
-            </label>
-
-            <input
-              id="password"
-              type="password"
-              placeholder="Digite sua senha"
-              value={senha}
-              onChange={(event) => setSenha(event.target.value)}
-              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white outline-none placeholder:text-gray-500 focus:border-green-500"
-            />
-          </div>
-
-          {erro && (
-            <p className="rounded-md border border-red-900 bg-red-950/50 px-4 py-2 text-sm text-red-400">
-              {erro}
-            </p>
-          )}
-          <button
-            type="submit"
-            disabled={carregando}
-            className="w-full rounded-md bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700"
-          >
-            {carregando ? "Entrando..." : "Entrar"}
-          </button>
-        </form>
+          Entrar com SUAP
+        </button>
       </section>
     </main>
   );
