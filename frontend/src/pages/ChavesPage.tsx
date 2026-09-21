@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import { listarChaves } from "../services/chaves";
 import { apiFetch } from "../services/api";
-import { criarEmprestimo } from "../services/emprestimos";
+import {
+  criarEmprestimo,
+  listarEmprestimos,
+  devolverEmprestimo,
+} from "../services/emprestimos";
 import type { Chave, StatusChave } from "../types/chave";
+import type { Emprestimo } from "../services/emprestimos";
 
 interface Solicitante {
   id: number;
@@ -33,6 +38,16 @@ function ChavesPage() {
   const [salvandoEmprestimo, setSalvandoEmprestimo] = useState(false);
   const [erroModal, setErroModal] = useState("");
 
+  // Devolução
+  const [emprestimos, setEmprestimos] = useState<Emprestimo[]>([]);
+  const [carregandoEmprestimos, setCarregandoEmprestimos] = useState(true);
+
+  const [emprestimoSelecionado, setEmprestimoSelecionado] =
+    useState<Emprestimo | null>(null);
+
+  const [devolvendo, setDevolvendo] = useState(false);
+  const [erroDevolucao, setErroDevolucao] = useState("");
+
   async function carregarChaves(paginaAtual = pagina) {
     try {
       setCarregando(true);
@@ -59,6 +74,7 @@ function ChavesPage() {
 
   useEffect(() => {
     carregarChaves(1);
+    carregarEmprestimos();
   }, []);
 
   function buscar() {
@@ -157,6 +173,7 @@ function ChavesPage() {
       fecharModal();
 
       await carregarChaves(pagina);
+      await carregarEmprestimos();
     } catch (error) {
       const erro = error as Error & {
         code?: string;
@@ -171,6 +188,45 @@ function ChavesPage() {
       }
     } finally {
       setSalvandoEmprestimo(false);
+    }
+  }
+
+  async function carregarEmprestimos() {
+    try {
+      setCarregandoEmprestimos(true);
+      const resposta = await listarEmprestimos({
+        status: "EMPRESTADA",
+      });
+
+      setEmprestimos(resposta);
+    } catch (error) {
+      console.error("Erro ao carregar empréstimos:", error);
+    } finally {
+      setCarregandoEmprestimos(false);
+    }
+  }
+
+  async function confirmarDevolucao() {
+    if (!emprestimoSelecionado) {
+      return;
+    }
+
+    try {
+      setDevolvendo(true);
+      setErroDevolucao("");
+
+      await devolverEmprestimo(emprestimoSelecionado.id);
+
+      setEmprestimoSelecionado(null);
+
+      await carregarEmprestimos();
+      await carregarChaves(pagina);
+    } catch (error) {
+      setErroDevolucao(
+        error instanceof Error ? error.message : "Erro ao devolver a chave.",
+      );
+    } finally {
+      setDevolvendo(false);
     }
   }
 
@@ -259,51 +315,73 @@ function ChavesPage() {
                       Status
                     </th>
 
-                    <th className="px-6 py-4 text-right text-sm font-semibold">
+                    <th className="px-6 py-4 text-left text-sm font-semibold">
                       Ação
                     </th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {chaves.map((chave) => (
-                    <tr
-                      key={chave.id}
-                      className="border-b border-gray-800 last:border-0"
-                    >
-                      <td className="px-6 py-4 font-medium">{chave.codigo}</td>
+                  {chaves.map((chave) => {
+                    const emprestimoDaChave = emprestimos.find(
+                      (emprestimo) => emprestimo.chave.id === chave.id,
+                    );
 
-                      <td className="px-6 py-4 text-gray-400">
-                        {chave.descricao}
-                      </td>
+                    return (
+                      <tr
+                        key={chave.id}
+                        className="border-b border-gray-800 last:border-0"
+                      >
+                        <td className="px-6 py-4 font-medium">
+                          {chave.codigo}
+                        </td>
 
-                      <td className="px-6 py-4">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                            chave.status === "DISPONIVEL"
-                              ? "bg-green-900 text-green-300"
-                              : "bg-yellow-900 text-yellow-300"
-                          }`}
-                        >
-                          {chave.status === "DISPONIVEL"
-                            ? "Disponível"
-                            : "Emprestada"}
-                        </span>
-                      </td>
+                        <td className="px-6 py-4 text-gray-400">
+                          {chave.descricao}
+                        </td>
 
-                      <td className="px-6 py-4 text-right">
-                        {chave.status === "DISPONIVEL" && (
-                          <button
-                            type="button"
-                            onClick={() => abrirModal(chave)}
-                            className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold hover:bg-green-700 cursor-pointer"
+                        <td className="px-6 py-4">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              chave.status === "DISPONIVEL"
+                                ? "bg-green-900 text-green-300"
+                                : "bg-yellow-900 text-yellow-300"
+                            }`}
                           >
-                            Emprestar
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                            {chave.status === "DISPONIVEL"
+                              ? "Disponível"
+                              : "Emprestada"}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          {chave.status === "DISPONIVEL" ? (
+                            <button
+                              type="button"
+                              onClick={() => abrirModal(chave)}
+                              className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 cursor-pointer"
+                            >
+                              Emprestar
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (emprestimoDaChave) {
+                                  setErroDevolucao("");
+                                  setEmprestimoSelecionado(emprestimoDaChave);
+                                }
+                              }}
+                              disabled={!emprestimoDaChave}
+                              className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Devolver
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -315,7 +393,8 @@ function ChavesPage() {
                 type="button"
                 onClick={paginaAnterior}
                 disabled={pagina === 1}
-                className="rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer 
+                disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Anterior
               </button>
@@ -328,14 +407,163 @@ function ChavesPage() {
                 type="button"
                 onClick={proximaPagina}
                 disabled={pagina === totalPaginas}
-                className="rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Próxima
               </button>
             </div>
           )}
         </section>
+
+        <section className="mt-8 overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
+          <div className="border-b border-gray-800 px-6 py-5">
+            <h2 className="text-xl font-bold">Empréstimos ativos</h2>
+
+            <p className="mt-1 text-sm text-gray-400">
+              Chaves que estão atualmente emprestadas.
+            </p>
+          </div>
+
+          {carregandoEmprestimos ? (
+            <div className="p-8 text-center text-gray-400">
+              Carregando empréstimos...
+            </div>
+          ) : emprestimos.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">
+              Nenhuma chave emprestada no momento.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-gray-800 bg-gray-950">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-sm font-semibold">
+                      Chave
+                    </th>
+
+                    <th className="px-6 py-4 text-left text-sm font-semibold">
+                      Solicitante
+                    </th>
+
+                    <th className="px-6 py-4 text-left text-sm font-semibold">
+                      Matrícula
+                    </th>
+
+                    <th className="px-6 py-4 text-left text-sm font-semibold">
+                      Ação
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {emprestimos.map((emprestimo) => (
+                    <tr
+                      key={emprestimo.id}
+                      className="border-b border-gray-800 last:border-0"
+                    >
+                      <td className="px-6 py-4">
+                        <p className="font-medium">{emprestimo.chave.codigo}</p>
+
+                        <p className="text-sm text-gray-400">
+                          {emprestimo.chave.descricao}
+                        </p>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        {emprestimo.solicitante.nome}
+                      </td>
+
+                      <td className="px-6 py-4 text-gray-400">
+                        {emprestimo.solicitante.matricula}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setErroDevolucao("");
+                            setEmprestimoSelecionado(emprestimo);
+                          }}
+                          className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 cursor-pointer"
+                        >
+                          Devolver
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
+
+      {emprestimoSelecionado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-gray-800 bg-gray-900 p-6 shadow-2xl">
+            <h2 className="text-xl font-bold text-white">
+              Confirmar devolução
+            </h2>
+
+            <p className="mt-2 text-gray-400">
+              Deseja confirmar a devolução desta chave?
+            </p>
+
+            <div className="mt-6 rounded-lg border border-gray-800 bg-gray-950 p-4">
+              <p className="font-semibold text-white">
+                {emprestimoSelecionado.chave.codigo}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-400">
+                {emprestimoSelecionado.chave.descricao}
+              </p>
+
+              <div className="mt-4 border-t border-gray-800 pt-4">
+                <p className="text-sm text-gray-400">Solicitante</p>
+
+                <p className="font-medium text-white">
+                  {emprestimoSelecionado.solicitante.nome}
+                </p>
+
+                <p className="text-sm text-gray-400">
+                  Matrícula: {emprestimoSelecionado.solicitante.matricula}
+                </p>
+              </div>
+            </div>
+
+            {erroDevolucao && (
+              <div className="mt-4 rounded-lg border border-red-800 bg-red-950/40 p-3 text-sm text-red-400">
+                {erroDevolucao}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!devolvendo) {
+                    setEmprestimoSelecionado(null);
+                    setErroDevolucao("");
+                  }
+                }}
+                disabled={devolvendo}
+                className="rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmarDevolucao}
+                disabled={devolvendo}
+                className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {devolvendo ? "Devolvendo..." : "Confirmar devolução"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {chaveSelecionada && (
         <div
@@ -367,7 +595,7 @@ function ChavesPage() {
                 type="button"
                 onClick={fecharModal}
                 disabled={salvandoEmprestimo}
-                className="text-2xl leading-none text-gray-500 hover:text-white disabled:opacity-40"
+                className="text-2xl leading-none text-gray-500 hover:text-white cursor-pointer disabled:opacity-40"
                 aria-label="Fechar modal"
               >
                 ×
@@ -472,7 +700,7 @@ function ChavesPage() {
                 type="button"
                 onClick={confirmarEmprestimo}
                 disabled={salvandoEmprestimo || !solicitante}
-                className="rounded-md bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                className="rounded-md bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
               >
                 {salvandoEmprestimo ? "Registrando..." : "Confirmar empréstimo"}
               </button>

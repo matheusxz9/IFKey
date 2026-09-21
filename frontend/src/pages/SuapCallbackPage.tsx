@@ -34,7 +34,7 @@ function SuapCallbackPage() {
           );
         }
 
-        localStorage.setItem("acessToken", dados.acessToken);
+        localStorage.setItem("accessToken", dados.accessToken);
 
         navigate("/chaves");
       } catch (error) {
