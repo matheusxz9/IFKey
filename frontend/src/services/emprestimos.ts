@@ -9,8 +9,9 @@ interface CriarEmprestimoParams {
 export interface Emprestimo {
   id: number;
   observacoes?: string | null;
-  dataEmprestimo: string;
-  dataDevolucao?: string | null;
+  dataHoraEmprestimo: string;
+  dataHoraDevolucao?: string | null;
+  status: string;
   solicitante: {
     id: number;
     nome: string;
@@ -57,4 +58,59 @@ export async function devolverEmprestimo(id: number) {
   return apiFetch(`/emprestimos/${id}/devolucao`, {
     method: "PATCH",
   });
+}
+
+interface HistoricoEmprestimosParams {
+  de?: string;
+  ate?: string;
+  solicitanteId?: number;
+  chaveId?: number;
+  page?: number;
+  limit?: number;
+}
+
+export interface ListaHistoricoEmprestimosResponse {
+  data: Emprestimo[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export async function listarHistoricoEmprestimos(
+  params: HistoricoEmprestimosParams = {},
+): Promise<ListaHistoricoEmprestimosResponse> {
+  const query = new URLSearchParams();
+
+  if (params.de) {
+    query.set("de", params.de);
+  }
+
+  if (params.ate) {
+    query.set("ate", params.ate);
+  }
+
+  if (params.solicitanteId) {
+    query.set("solicitanteId", String(params.solicitanteId));
+  }
+
+  if (params.chaveId) {
+    query.set("chaveId", String(params.chaveId));
+  }
+
+  if (params.page) {
+    query.set("page", String(params.page));
+  }
+
+  if (params.limit) {
+    query.set("limit", String(params.limit));
+  }
+
+  const queryString = query.toString();
+
+  return apiFetch(
+    `/emprestimos/historico${queryString ? `?${queryString}` : ""}`,
+  );
 }
