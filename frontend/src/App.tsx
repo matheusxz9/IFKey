@@ -4,6 +4,7 @@ import SuapCallbackPage from "./pages/SuapCallbackPage";
 import ChavesPage from "./pages/ChavesPage";
 import HistoricoPage from "./pages/HistoricoPage";
 import GestaoChavesPage from "./pages/GestaoChavesPage";
+import GestaoSolicitantesPage from "./pages/GestaoSolicitantesPage";
 
 function App() {
   return (
@@ -18,6 +19,8 @@ function App() {
         <Route path="/historico" element={<HistoricoPage />} />
 
         <Route path="/admin/chaves" element={<GestaoChavesPage />} />
+
+        <Route path="/admin/solicitantes" element={<GestaoSolicitantesPage />} />
       </Routes>
     </BrowserRouter>
   );
