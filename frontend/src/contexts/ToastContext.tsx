@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 
 type ToastTipo = "success" | "error" | "warning";
 
@@ -20,13 +20,24 @@ let toastId = 0;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const timeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    const timeouts = timeoutsRef.current;
+    return () => {
+      timeouts.forEach((id) => clearTimeout(id));
+      timeouts.clear();
+    };
+  }, []);
 
   const adicionar = useCallback((tipo: ToastTipo, mensagem: string) => {
     const id = ++toastId;
     setToasts((prev) => [...prev, { id, tipo, mensagem }]);
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
+      timeoutsRef.current.delete(id);
     }, 5000);
+    timeoutsRef.current.set(id, timeoutId);
   }, []);
 
   const success = useCallback((m: string) => adicionar("success", m), [adicionar]);
@@ -34,6 +45,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const warning = useCallback((m: string) => adicionar("warning", m), [adicionar]);
 
   function remover(id: number) {
+    const timeoutId = timeoutsRef.current.get(id);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutsRef.current.delete(id);
+    }
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }
 
@@ -73,6 +89,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) 
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useToast(): ToastContextType {
   const context = useContext(ToastContext);
   if (!context) {

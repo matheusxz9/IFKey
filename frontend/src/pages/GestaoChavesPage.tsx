@@ -66,9 +66,11 @@ function GestaoChavesPage() {
     }
   }
 
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
     carregarChaves(1);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   function buscar() {
     setPagina(1);
@@ -153,13 +155,13 @@ function GestaoChavesPage() {
       setChaveParaInativar(null);
       await carregarChaves(pagina);
     } catch {
-      // erro tratado pelo ConfirmDialog
+      toast.error("Erro ao inativar a chave. Tente novamente.");
     } finally {
       setInativando(false);
     }
   }
 
-  const colunas: Coluna<Record<string, unknown>>[] = [
+  const colunas: Coluna[] = [
     { key: "codigo", titulo: "Código" },
     { key: "descricao", titulo: "Descrição" },
     { key: "localizacao", titulo: "Localização" },
@@ -294,7 +296,7 @@ function GestaoChavesPage() {
         <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
           <DataTable
             colunas={colunas}
-            dados={chaves as unknown as Record<string, unknown>[]}
+            dados={chaves}
             carregando={carregando}
             mensagemVazia="Nenhuma chave encontrada."
           />

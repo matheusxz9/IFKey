@@ -74,9 +74,11 @@ function GestaoSolicitantesPage() {
     }
   }
 
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
     carregarSolicitantes(1);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   function buscar() {
     setPagina(1);
@@ -153,13 +155,13 @@ function GestaoSolicitantesPage() {
       setSolicitanteParaInativar(null);
       await carregarSolicitantes(pagina);
     } catch {
-      // erro tratado pelo ConfirmDialog
+      toast.error("Erro ao inativar o solicitante. Tente novamente.");
     } finally {
       setInativando(false);
     }
   }
 
-  const colunas: Coluna<Record<string, unknown>>[] = [
+  const colunas: Coluna[] = [
     { key: "nome", titulo: "Nome" },
     {
       key: "tipo",
@@ -259,7 +261,7 @@ function GestaoSolicitantesPage() {
         )}
 
         <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
-          <DataTable colunas={colunas} dados={solicitantes as unknown as Record<string, unknown>[]}
+          <DataTable colunas={colunas} dados={solicitantes}
             carregando={carregando} mensagemVazia="Nenhum solicitante encontrado." />
           <Pagination paginaAtual={pagina} totalPaginas={totalPaginas}
             onAnterior={() => carregarSolicitantes(pagina - 1)}

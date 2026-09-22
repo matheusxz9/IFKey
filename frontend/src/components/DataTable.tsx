@@ -1,20 +1,22 @@
 import type { ReactNode } from "react";
 
-export interface Coluna<T> {
+export interface Coluna {
   key: string;
   titulo: string;
-  render?: (item: T) => ReactNode;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  render?: (item: any) => ReactNode;
 }
 
 interface DataTableProps<T> {
-  colunas: Coluna<T>[];
+  colunas: Coluna[];
   dados: T[];
   carregando: boolean;
   mensagemVazia?: string;
   chaveId?: keyof T;
 }
 
-export default function DataTable<T extends Record<string, unknown>>({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default function DataTable<T extends Record<string, any>>({
   colunas,
   dados,
   carregando,

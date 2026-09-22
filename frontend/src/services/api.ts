@@ -7,7 +7,9 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
 
   const headers = new Headers(options.headers);
 
-  headers.set("Content-Type", "application/json");
+  if (options.body) {
+    headers.set("Content-Type", "application/json");
+  }
 
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);

@@ -73,10 +73,12 @@ function ChavesPage() {
     }
   }
 
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
     carregarChaves(1);
     carregarEmprestimos();
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   function buscar() {
     setPagina(1);
@@ -154,13 +156,13 @@ function ChavesPage() {
       await carregarEmprestimos();
       await carregarChaves(pagina);
     } catch {
-      // erro já tratado
+      toast.error("Erro ao registrar a devolução. Tente novamente.");
     } finally {
       setDevolvendo(false);
     }
   }
 
-  const colunasChaves: Coluna<Record<string, unknown>>[] = [
+  const colunasChaves: Coluna[] = [
     { key: "codigo", titulo: "Código" },
     { key: "descricao", titulo: "Descrição" },
     {
@@ -199,7 +201,7 @@ function ChavesPage() {
     },
   ];
 
-  const colunasEmprestimos: Coluna<Record<string, unknown>>[] = [
+  const colunasEmprestimos: Coluna[] = [
     {
       key: "chave",
       titulo: "Chave",
@@ -254,8 +256,9 @@ function ChavesPage() {
         )}
 
         <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
-          <DataTable colunas={colunasChaves} dados={chaves as unknown as Record<string, unknown>[]}
+          <DataTable colunas={colunasChaves} dados={chaves}
             carregando={carregando} mensagemVazia="Nenhuma chave encontrada." />
+
           <Pagination paginaAtual={pagina} totalPaginas={totalPaginas}
             onAnterior={() => carregarChaves(pagina - 1)} onProxima={() => carregarChaves(pagina + 1)} />
         </section>
@@ -265,7 +268,7 @@ function ChavesPage() {
             <h2 className="text-xl font-bold">Empréstimos ativos</h2>
             <p className="mt-1 text-sm text-gray-400">Chaves que estão atualmente emprestadas.</p>
           </div>
-          <DataTable colunas={colunasEmprestimos} dados={emprestimos as unknown as Record<string, unknown>[]}
+          <DataTable colunas={colunasEmprestimos} dados={emprestimos}
             carregando={carregandoEmprestimos} mensagemVazia="Nenhuma chave emprestada no momento." />
         </section>
       </div>

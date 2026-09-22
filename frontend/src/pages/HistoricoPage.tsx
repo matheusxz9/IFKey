@@ -5,7 +5,7 @@ import PageHeader from "../components/PageHeader";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
 
-const colunas: Coluna<Emprestimo>[] = [
+const colunas: Coluna[] = [
   {
     key: "chave",
     titulo: "Chave",
@@ -82,9 +82,11 @@ function HistoricoPage() {
     }
   }
 
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
     carregarHistorico(1);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   function pesquisar() {
     setPagina(1);
@@ -143,7 +145,7 @@ function HistoricoPage() {
       <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
         <DataTable
           colunas={colunas}
-          dados={emprestimos as unknown as Record<string, unknown>[]}
+          dados={emprestimos}
           carregando={carregando}
           mensagemVazia="Nenhum empréstimo encontrado."
         />

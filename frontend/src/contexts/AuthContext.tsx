@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react";
 
 export interface User {
   id: number;
@@ -18,41 +18,58 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
+function parseUserFromStorage(): User | null {
+  try {
     const saved = localStorage.getItem("user");
-    return saved ? JSON.parse(saved) : null;
-  });
+    if (!saved) return null;
+    return JSON.parse(saved) as User;
+  } catch {
+    localStorage.removeItem("user");
+    return null;
+  }
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(parseUserFromStorage);
 
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem("accessToken");
   });
 
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
+
   useEffect(() => {
-    if (token && !user) {
-      carregarUsuario();
-    }
-  }, [token]);
+    if (!token || user) return;
 
-  async function carregarUsuario() {
-    try {
-      const API_URL = import.meta.env.VITE_API_URL;
-      const resposta = await fetch(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const controller = new AbortController();
 
-      if (!resposta.ok) {
+    async function carregarUsuario() {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL;
+        const resposta = await fetch(`${API_URL}/auth/me`, {
+          headers: { Authorization: `Bearer ${tokenRef.current}` },
+          signal: controller.signal,
+        });
+
+        if (!resposta.ok) {
+          logout();
+          return;
+        }
+
+        const dados = await resposta.json();
+        setUser(dados);
+        localStorage.setItem("user", JSON.stringify(dados));
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         logout();
-        return;
       }
-
-      const dados = await resposta.json();
-      setUser(dados);
-      localStorage.setItem("user", JSON.stringify(dados));
-    } catch {
-      logout();
     }
-  }
+
+    carregarUsuario();
+
+    return () => controller.abort();
+  }, [token, user]);
 
   function login(novoToken: string, novoUser: User) {
     setToken(novoToken);
@@ -84,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (!context) {
