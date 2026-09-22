@@ -1,3 +1,5 @@
+import type { Paginacao } from "./common";
+
 export type TipoSolicitante = "ALUNO" | "PROFESSOR" | "SERVIDOR";
 
 export interface Solicitante {
@@ -7,13 +9,6 @@ export interface Solicitante {
   matricula: string;
   contato: string;
   ativo: boolean;
-}
-
-export interface Paginacao {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
 }
 
 export interface ListaSolicitantesResponse {

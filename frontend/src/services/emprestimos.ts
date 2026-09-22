@@ -1,28 +1,10 @@
 import { apiFetch } from "./api";
+import type { Emprestimo, ListaEmprestimosResponse } from "../types/emprestimo";
 
 interface CriarEmprestimoParams {
   solicitanteId: number;
   chaveId: number;
   observacoes?: string;
-}
-
-export interface Emprestimo {
-  id: number;
-  observacoes?: string | null;
-  dataHoraEmprestimo: string;
-  dataHoraDevolucao?: string | null;
-  status: string;
-  solicitante: {
-    id: number;
-    nome: string;
-    matricula: string;
-    tipo: string;
-  };
-  chave: {
-    id: number;
-    codigo: string;
-    descricao: string;
-  };
 }
 
 interface ListarEmprestimosParams {
@@ -69,19 +51,9 @@ interface HistoricoEmprestimosParams {
   limit?: number;
 }
 
-export interface ListaHistoricoEmprestimosResponse {
-  data: Emprestimo[];
-  meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
-
 export async function listarHistoricoEmprestimos(
   params: HistoricoEmprestimosParams = {},
-): Promise<ListaHistoricoEmprestimosResponse> {
+): Promise<ListaEmprestimosResponse> {
   const query = new URLSearchParams();
 
   if (params.de) {

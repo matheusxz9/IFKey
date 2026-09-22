@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const API_URL = "http://localhost:3000/api";
+import { apiFetch } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
 
 function SuapCallbackPage() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [erro, setErro] = useState("");
 
   useEffect(() => {
@@ -18,23 +19,12 @@ function SuapCallbackPage() {
       }
 
       try {
-        const resposta = await fetch(`${API_URL}/auth/suap`, {
+        const dados = await apiFetch("/auth/suap", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify({ code }),
         });
 
-        const dados = await resposta.json();
-
-        if (!resposta.ok) {
-          throw new Error(
-            dados.message || "Não foi possível realizar o login.",
-          );
-        }
-
-        localStorage.setItem("accessToken", dados.accessToken);
+        login(dados.accessToken, dados.administrador);
 
         navigate("/chaves");
       } catch (error) {
@@ -44,7 +34,7 @@ function SuapCallbackPage() {
       }
     }
     autenticar();
-  }, [navigate]);
+  }, [navigate, login]);
 
   if (erro) {
     return (

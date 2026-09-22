@@ -1,4 +1,6 @@
-const API_URL = "http://localhost:3000/api";
+import { AppError } from "./AppError";
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   const token = localStorage.getItem("accessToken");
@@ -18,15 +20,19 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
 
   const dados = await resposta.json().catch(() => null);
 
+  if (resposta.status === 401 && token) {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("user");
+    window.location.href = "/";
+    throw new AppError("Sessão expirada. Faça login novamente.", "NAO_AUTENTICADO", 401);
+  }
+
   if (!resposta.ok) {
-    const erro = new Error(dados?.message || "Ocorreu um erro na requisição.");
-
-    Object.assign(erro, {
-      code: dados?.code,
-      status: resposta.status,
-    });
-
-    throw erro;
+    throw new AppError(
+      dados?.message || "Ocorreu um erro na requisição.",
+      dados?.code || "ERRO_DESCONHECIDO",
+      resposta.status,
+    );
   }
 
   return dados;

@@ -28,7 +28,7 @@ export class Emprestimo {
   @JoinColumn({ name: 'id_administrador_registro' })
   administrador: Administrador;
 
-  @CreateDateColumn({ name: 'data_hora_emprestimo' })
+  @CreateDateColumn({ name: 'data_hora_emprestimo', type: 'timestamptz' })
   dataHoraEmprestimo: Date;
 
   @Column({ name: 'data_hora_devolucao', type: 'timestamptz', nullable: true })

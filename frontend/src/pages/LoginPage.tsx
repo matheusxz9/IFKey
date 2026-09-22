@@ -2,13 +2,10 @@ import logoIfkey from "../assets/logo-ifkey.png";
 
 function LoginPage() {
   function entrarComSuap() {
-    const clientId = "n0TikZwb7KswC2Cvyb90K3ob4cZCQLnoJq4Hc8g8";
-    const redirectUri = "http://localhost:5173/login/suap/callback";
-
     const params = new URLSearchParams({
-      client_id: clientId,
+      client_id: import.meta.env.VITE_CLIENT_ID,
       response_type: "code",
-      redirect_uri: redirectUri,
+      redirect_uri: import.meta.env.VITE_REDIRECT_URI,
     });
 
     window.location.href = `https://suap.ifrn.edu.br/o/authorize/?${params.toString()}`;

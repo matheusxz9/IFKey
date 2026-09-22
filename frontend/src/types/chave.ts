@@ -1,3 +1,5 @@
+import type { Paginacao } from "./common";
+
 export type StatusChave = "DISPONIVEL" | "EMPRESTADA";
 
 export interface Chave {
@@ -7,13 +9,6 @@ export interface Chave {
   localizacao: string;
   status: StatusChave;
   ativo: boolean;
-}
-
-export interface Paginacao {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
 }
 
 export interface ListaChavesResponse {

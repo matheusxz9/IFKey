@@ -93,3 +93,17 @@ export async function inativarSolicitante(id: number): Promise<void> {
     method: "DELETE",
   });
 }
+
+export async function buscarSolicitantePorMatricula(matricula: string): Promise<Solicitante> {
+  const resposta = await apiFetch(
+    `/solicitantes?matricula=${encodeURIComponent(matricula)}`,
+  );
+
+  const dados = resposta.data ?? resposta;
+
+  if (!dados || (Array.isArray(dados) && dados.length === 0)) {
+    throw new Error("Solicitante não encontrado.");
+  }
+
+  return Array.isArray(dados) ? dados[0] : dados;
+}
