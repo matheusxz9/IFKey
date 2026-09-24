@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   listarSolicitantes,
   criarSolicitante,
@@ -52,25 +52,38 @@ function GestaoSolicitantesPage() {
   const [solicitanteParaInativar, setSolicitanteParaInativar] = useState<Solicitante | null>(null);
   const [inativando, setInativando] = useState(false);
 
-  async function carregarSolicitantes(paginaAtual = pagina) {
+  const requisicaoRef = useRef(0);
+
+  async function carregarSolicitantes(
+    paginaAtual = pagina,
+    filtros: {
+      nome: string;
+      matricula: string;
+      tipo: TipoSolicitante | "";
+      ativo: boolean | "";
+    } = { nome: buscaNome, matricula: buscaMatricula, tipo, ativo },
+  ) {
+    const requisicao = ++requisicaoRef.current;
     try {
       setCarregando(true);
       setErro("");
       const resposta = await listarSolicitantes({
-        nome: buscaNome || undefined,
-        matricula: buscaMatricula || undefined,
-        tipo: tipo || undefined,
-        ativo: ativo !== "" ? ativo : undefined,
+        nome: filtros.nome || undefined,
+        matricula: filtros.matricula || undefined,
+        tipo: filtros.tipo || undefined,
+        ativo: filtros.ativo !== "" ? filtros.ativo : undefined,
         page: paginaAtual,
         limit: 10,
       });
+      if (requisicao !== requisicaoRef.current) return;
       setSolicitantes(resposta.data);
       setPagina(resposta.meta.page);
       setTotalPaginas(resposta.meta.totalPages);
     } catch (error) {
+      if (requisicao !== requisicaoRef.current) return;
       setErro(error instanceof Error ? error.message : "Erro ao carregar os solicitantes.");
     } finally {
-      setCarregando(false);
+      if (requisicao === requisicaoRef.current) setCarregando(false);
     }
   }
 
@@ -161,60 +174,53 @@ function GestaoSolicitantesPage() {
     }
   }
 
-  const colunas: Coluna[] = [
+  const colunas: Coluna<Solicitante>[] = [
     { key: "nome", titulo: "Nome" },
     {
       key: "tipo",
       titulo: "Tipo",
-      render: (item) => {
-        const s = item as unknown as Solicitante;
-        return (
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            s.tipo === "ALUNO" ? "bg-blue-900 text-blue-300"
-            : s.tipo === "PROFESSOR" ? "bg-purple-900 text-purple-300"
-            : "bg-orange-900 text-orange-300"
-          }`}>
-            {formatarTipo(s.tipo)}
-          </span>
-        );
-      },
+      render: (s) => (
+        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+          s.tipo === "ALUNO" ? "bg-blue-900 text-blue-300"
+          : s.tipo === "PROFESSOR" ? "bg-purple-900 text-purple-300"
+          : "bg-orange-900 text-orange-300"
+        }`}>
+          {formatarTipo(s.tipo)}
+        </span>
+      ),
     },
     { key: "matricula", titulo: "Matrícula" },
     { key: "contato", titulo: "Contato" },
     {
       key: "ativo",
       titulo: "Ativo",
-      render: (item) => {
-        const s = item as unknown as Solicitante;
-        return (
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            s.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-400"
-          }`}>
-            {s.ativo ? "Ativo" : "Inativo"}
-          </span>
-        );
-      },
+      render: (s) => (
+        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+          s.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-400"
+        }`}>
+          {s.ativo ? "Ativo" : "Inativo"}
+        </span>
+      ),
     },
     {
       key: "acoes",
       titulo: "Ações",
-      render: (item) => {
-        const s = item as unknown as Solicitante;
-        return (
-          <div className="flex gap-2">
-            <button type="button" onClick={() => abrirModalEdicao(s)}
-              className="rounded-md border border-gray-700 px-3 py-1 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer">
-              Editar
+      render: (s) => (
+        <div className="flex gap-2">
+          <button type="button" aria-label={`Editar solicitante ${s.nome}`}
+            onClick={() => abrirModalEdicao(s)}
+            className="rounded-md border border-gray-700 px-3 py-1 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer">
+            Editar
+          </button>
+          {s.ativo && (
+            <button type="button" aria-label={`Inativar solicitante ${s.nome}`}
+              onClick={() => setSolicitanteParaInativar(s)}
+              className="rounded-md border border-red-800 px-3 py-1 text-sm font-medium text-red-400 hover:bg-red-950/40 cursor-pointer">
+              Inativar
             </button>
-            {s.ativo && (
-              <button type="button" onClick={() => setSolicitanteParaInativar(s)}
-                className="rounded-md border border-red-800 px-3 py-1 text-sm font-medium text-red-400 hover:bg-red-950/40 cursor-pointer">
-                Inativar
-              </button>
-            )}
-          </div>
-        );
-      },
+          )}
+        </div>
+      ),
     },
   ];
 
@@ -223,41 +229,56 @@ function GestaoSolicitantesPage() {
       <div className="mx-auto max-w-6xl">
         <PageHeader titulo="Gestão de solicitantes" subtitulo="Cadastre, edite e gerencie os solicitantes de chaves.">
           <button type="button" onClick={abrirModalCadastro}
-            className="rounded-md bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700 cursor-pointer">
+            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer">
             Novo solicitante
           </button>
         </PageHeader>
 
         <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-800 bg-gray-900 p-5 md:flex-row">
-          <input type="text" placeholder="Buscar por nome..." value={buscaNome}
+          <input type="text" placeholder="Buscar por nome..." aria-label="Buscar solicitantes por nome"
+            value={buscaNome}
             onChange={(e) => setBuscaNome(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") buscar(); }}
             className="flex-1 rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-          <input type="text" placeholder="Buscar por matrícula..." value={buscaMatricula}
+          <input type="text" placeholder="Buscar por matrícula..." aria-label="Buscar solicitantes por matrícula"
+            value={buscaMatricula}
             onChange={(e) => setBuscaMatricula(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") buscar(); }}
             className="flex-1 rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-          <select value={tipo} onChange={(e) => { setTipo(e.target.value as TipoSolicitante | ""); setPagina(1); setTimeout(() => carregarSolicitantes(1), 0); }}
+          <select value={tipo} aria-label="Filtrar por tipo de solicitante"
+            onChange={(e) => {
+              const novoTipo = e.target.value as TipoSolicitante | "";
+              setTipo(novoTipo);
+              setPagina(1);
+              void carregarSolicitantes(1, { nome: buscaNome, matricula: buscaMatricula, tipo: novoTipo, ativo });
+            }}
             className="rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
             <option value="">Todos os tipos</option>
             <option value="ALUNO">Aluno</option>
             <option value="PROFESSOR">Professor</option>
             <option value="SERVIDOR">Servidor</option>
           </select>
-          <select value={ativo === "" ? "" : String(ativo)} onChange={(e) => { const v = e.target.value; setAtivo(v === "" ? "" : v === "true"); setPagina(1); setTimeout(() => carregarSolicitantes(1), 0); }}
+          <select value={ativo === "" ? "" : String(ativo)} aria-label="Filtrar por situação do cadastro"
+            onChange={(e) => {
+              const valor = e.target.value;
+              const novoAtivo = valor === "" ? "" : valor === "true";
+              setAtivo(novoAtivo);
+              setPagina(1);
+              void carregarSolicitantes(1, { nome: buscaNome, matricula: buscaMatricula, tipo, ativo: novoAtivo });
+            }}
             className="rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
             <option value="">Todos</option>
             <option value="true">Ativos</option>
             <option value="false">Inativos</option>
           </select>
           <button type="button" onClick={buscar}
-            className="rounded-md bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700 cursor-pointer">
+            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer">
             Buscar
           </button>
         </section>
 
         {erro && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400">{erro}</div>
+          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400" role="alert">{erro}</div>
         )}
 
         <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
@@ -299,7 +320,7 @@ function GestaoSolicitantesPage() {
             className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
         </div>
         {erroModal && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-400">{erroModal}</div>
+          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-400" role="alert">{erroModal}</div>
         )}
         <div className="flex justify-end gap-3">
           <button type="button" onClick={fecharModal} disabled={salvando}
@@ -307,7 +328,7 @@ function GestaoSolicitantesPage() {
             Cancelar
           </button>
           <button type="button" onClick={confirmarSalvar} disabled={salvando}
-            className="rounded-md bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40">
+            className="rounded-md bg-green-700 px-5 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40">
             {salvando ? "Salvando..." : modalTipo === "cadastro" ? "Cadastrar" : "Salvar"}
           </button>
         </div>

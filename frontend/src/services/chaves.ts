@@ -36,11 +36,11 @@ export async function listarChaves(
 
   const queryString = query.toString();
 
-  return apiFetch(`/chaves${queryString ? `?${queryString}` : ""}`);
+  return apiFetch<ListaChavesResponse>(`/chaves${queryString ? `?${queryString}` : ""}`);
 }
 
 export async function buscarChave(id: number): Promise<Chave> {
-  return apiFetch(`/chaves/${id}`);
+  return apiFetch<Chave>(`/chaves/${id}`);
 }
 
 interface CriarChaveParams {
@@ -50,7 +50,7 @@ interface CriarChaveParams {
 }
 
 export async function criarChave(dados: CriarChaveParams): Promise<Chave> {
-  return apiFetch("/chaves", {
+  return apiFetch<Chave>("/chaves", {
     method: "POST",
     body: JSON.stringify(dados),
   });
@@ -67,14 +67,14 @@ export async function atualizarChave(
   id: number,
   dados: AtualizarChaveParams,
 ): Promise<Chave> {
-  return apiFetch(`/chaves/${id}`, {
+  return apiFetch<Chave>(`/chaves/${id}`, {
     method: "PATCH",
     body: JSON.stringify(dados),
   });
 }
 
 export async function inativarChave(id: number): Promise<void> {
-  return apiFetch(`/chaves/${id}`, {
+  return apiFetch<void>(`/chaves/${id}`, {
     method: "DELETE",
   });
 }

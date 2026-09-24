@@ -20,14 +20,14 @@ function LoginPage() {
           className="mx-auto mb-4 h-32 w-32 object-contain"
         />
 
-        <p className="mb-8 text-center text-gray-400">
+        <h1 className="mb-8 text-center text-gray-400">
           Acesso do Administrador
-        </p>
+        </h1>
 
         <button
           type="button"
           onClick={entrarComSuap}
-          className="w-full rounded-md bg-green-600 px-4 py-3 font-semibold text-white hover:bg-green-700 cursor-pointer"
+          className="w-full rounded-md bg-green-700 px-4 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer"
         >
           Entrar com SUAP
         </button>

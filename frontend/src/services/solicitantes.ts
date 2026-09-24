@@ -45,13 +45,13 @@ export async function listarSolicitantes(
 
   const queryString = query.toString();
 
-  return apiFetch(
+  return apiFetch<ListaSolicitantesResponse>(
     `/solicitantes${queryString ? `?${queryString}` : ""}`,
   );
 }
 
 export async function buscarSolicitante(id: number): Promise<Solicitante> {
-  return apiFetch(`/solicitantes/${id}`);
+  return apiFetch<Solicitante>(`/solicitantes/${id}`);
 }
 
 interface CriarSolicitanteParams {
@@ -64,7 +64,7 @@ interface CriarSolicitanteParams {
 export async function criarSolicitante(
   dados: CriarSolicitanteParams,
 ): Promise<Solicitante> {
-  return apiFetch("/solicitantes", {
+  return apiFetch<Solicitante>("/solicitantes", {
     method: "POST",
     body: JSON.stringify(dados),
   });
@@ -82,28 +82,28 @@ export async function atualizarSolicitante(
   id: number,
   dados: AtualizarSolicitanteParams,
 ): Promise<Solicitante> {
-  return apiFetch(`/solicitantes/${id}`, {
+  return apiFetch<Solicitante>(`/solicitantes/${id}`, {
     method: "PATCH",
     body: JSON.stringify(dados),
   });
 }
 
 export async function inativarSolicitante(id: number): Promise<void> {
-  return apiFetch(`/solicitantes/${id}`, {
+  return apiFetch<void>(`/solicitantes/${id}`, {
     method: "DELETE",
   });
 }
 
 export async function buscarSolicitantePorMatricula(matricula: string): Promise<Solicitante> {
-  const resposta = await apiFetch(
+  const resposta = await apiFetch<ListaSolicitantesResponse>(
     `/solicitantes?matricula=${encodeURIComponent(matricula)}`,
   );
 
-  const dados = resposta.data ?? resposta;
+  const solicitante = resposta.data?.[0];
 
-  if (!dados || (Array.isArray(dados) && dados.length === 0)) {
+  if (!solicitante) {
     throw new Error("Solicitante não encontrado.");
   }
 
-  return Array.isArray(dados) ? dados[0] : dados;
+  return solicitante;
 }

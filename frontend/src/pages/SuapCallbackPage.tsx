@@ -1,14 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../services/api";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth, type User } from "../contexts/AuthContext";
 
 function SuapCallbackPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [erro, setErro] = useState("");
+  const codeProcessadoRef = useRef(false);
 
   useEffect(() => {
+    if (codeProcessadoRef.current) return;
+    codeProcessadoRef.current = true;
+
     async function autenticar() {
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
@@ -19,14 +23,17 @@ function SuapCallbackPage() {
       }
 
       try {
-        const dados = await apiFetch("/auth/suap", {
+        const dados = await apiFetch<{
+          accessToken: string;
+          administrador: User;
+        }>("/auth/suap", {
           method: "POST",
           body: JSON.stringify({ code }),
         });
 
         login(dados.accessToken, dados.administrador);
 
-        navigate("/chaves");
+        navigate("/chaves", { replace: true });
       } catch (error) {
         setErro(
           error instanceof Error ? error.message : "Erro ao realizar o login.",
@@ -52,7 +59,9 @@ function SuapCallbackPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-950">
-      <p className="text-gray-400">Entrando no IFKey...</p>
+      <p className="text-gray-400" role="status">
+        Entrando no IFKey...
+      </p>
     </main>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   listarChaves,
   criarChave,
@@ -41,28 +41,40 @@ function GestaoChavesPage() {
   const [chaveParaInativar, setChaveParaInativar] = useState<Chave | null>(null);
   const [inativando, setInativando] = useState(false);
 
-  async function carregarChaves(paginaAtual = pagina) {
+  const requisicaoRef = useRef(0);
+
+  async function carregarChaves(
+    paginaAtual = pagina,
+    filtros: { busca: string; status: StatusChave | ""; ativo: boolean | "" } = {
+      busca,
+      status,
+      ativo,
+    },
+  ) {
+    const requisicao = ++requisicaoRef.current;
     try {
       setCarregando(true);
       setErro("");
 
       const resposta = await listarChaves({
-        busca: busca || undefined,
-        status: status || undefined,
-        ativo: ativo !== "" ? ativo : undefined,
+        busca: filtros.busca || undefined,
+        status: filtros.status || undefined,
+        ativo: filtros.ativo !== "" ? filtros.ativo : undefined,
         page: paginaAtual,
         limit: 10,
       });
 
+      if (requisicao !== requisicaoRef.current) return;
       setChaves(resposta.data);
       setPagina(resposta.meta.page);
       setTotalPaginas(resposta.meta.totalPages);
     } catch (error) {
+      if (requisicao !== requisicaoRef.current) return;
       setErro(
         error instanceof Error ? error.message : "Erro ao carregar as chaves.",
       );
     } finally {
-      setCarregando(false);
+      if (requisicao === requisicaoRef.current) setCarregando(false);
     }
   }
 
@@ -161,66 +173,63 @@ function GestaoChavesPage() {
     }
   }
 
-  const colunas: Coluna[] = [
+  const colunas: Coluna<Chave>[] = [
     { key: "codigo", titulo: "Código" },
     { key: "descricao", titulo: "Descrição" },
     { key: "localizacao", titulo: "Localização" },
     {
       key: "status",
       titulo: "Status",
-      render: (item) => (
+      render: (chave) => (
         <span
           className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            (item as Chave).status === "DISPONIVEL"
+            chave.status === "DISPONIVEL"
               ? "bg-green-900 text-green-300"
               : "bg-yellow-900 text-yellow-300"
           }`}
         >
-          {(item as Chave).status === "DISPONIVEL" ? "Disponível" : "Emprestada"}
+          {chave.status === "DISPONIVEL" ? "Disponível" : "Emprestada"}
         </span>
       ),
     },
     {
       key: "ativo",
       titulo: "Ativo",
-      render: (item) => (
+      render: (chave) => (
         <span
           className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            (item as Chave).ativo
-              ? "bg-green-900 text-green-300"
-              : "bg-gray-700 text-gray-400"
+            chave.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-400"
           }`}
         >
-          {(item as Chave).ativo ? "Ativo" : "Inativo"}
+          {chave.ativo ? "Ativo" : "Inativo"}
         </span>
       ),
     },
     {
       key: "acoes",
       titulo: "Ações",
-      render: (item) => {
-        const chave = item as unknown as Chave;
-        return (
-          <div className="flex gap-2">
+      render: (chave) => (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            aria-label={`Editar chave ${chave.codigo}`}
+            onClick={() => abrirModalEdicao(chave)}
+            className="rounded-md border border-gray-700 px-3 py-1 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer"
+          >
+            Editar
+          </button>
+          {chave.ativo && (
             <button
               type="button"
-              onClick={() => abrirModalEdicao(chave)}
-              className="rounded-md border border-gray-700 px-3 py-1 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer"
+              aria-label={`Inativar chave ${chave.codigo}`}
+              onClick={() => setChaveParaInativar(chave)}
+              className="rounded-md border border-red-800 px-3 py-1 text-sm font-medium text-red-400 hover:bg-red-950/40 cursor-pointer"
             >
-              Editar
+              Inativar
             </button>
-            {chave.ativo && (
-              <button
-                type="button"
-                onClick={() => setChaveParaInativar(chave)}
-                className="rounded-md border border-red-800 px-3 py-1 text-sm font-medium text-red-400 hover:bg-red-950/40 cursor-pointer"
-              >
-                Inativar
-              </button>
-            )}
-          </div>
-        );
-      },
+          )}
+        </div>
+      ),
     },
   ];
 
@@ -234,7 +243,7 @@ function GestaoChavesPage() {
           <button
             type="button"
             onClick={abrirModalCadastro}
-            className="rounded-md bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700 cursor-pointer"
+            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer"
           >
             Nova chave
           </button>
@@ -244,6 +253,7 @@ function GestaoChavesPage() {
           <input
             type="text"
             placeholder="Buscar por código, descrição ou localização..."
+            aria-label="Buscar chaves por código, descrição ou localização"
             value={busca}
             onChange={(event) => setBusca(event.target.value)}
             onKeyDown={(event) => {
@@ -253,10 +263,12 @@ function GestaoChavesPage() {
           />
           <select
             value={status}
+            aria-label="Filtrar por status"
             onChange={(event) => {
-              setStatus(event.target.value as StatusChave | "");
+              const novoStatus = event.target.value as StatusChave | "";
+              setStatus(novoStatus);
               setPagina(1);
-              setTimeout(() => carregarChaves(1), 0);
+              void carregarChaves(1, { busca, status: novoStatus, ativo });
             }}
             className="rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer"
           >
@@ -266,11 +278,13 @@ function GestaoChavesPage() {
           </select>
           <select
             value={ativo === "" ? "" : String(ativo)}
+            aria-label="Filtrar por situação do cadastro"
             onChange={(event) => {
               const valor = event.target.value;
-              setAtivo(valor === "" ? "" : valor === "true");
+              const novoAtivo = valor === "" ? "" : valor === "true";
+              setAtivo(novoAtivo);
               setPagina(1);
-              setTimeout(() => carregarChaves(1), 0);
+              void carregarChaves(1, { busca, status, ativo: novoAtivo });
             }}
             className="rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer"
           >
@@ -281,14 +295,14 @@ function GestaoChavesPage() {
           <button
             type="button"
             onClick={buscar}
-            className="rounded-md bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700 cursor-pointer"
+            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer"
           >
             Buscar
           </button>
         </section>
 
         {erro && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400">
+          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400" role="alert">
             {erro}
           </div>
         )}
@@ -355,7 +369,7 @@ function GestaoChavesPage() {
           />
         </div>
         {erroModal && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-400">
+          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-400" role="alert">
             {erroModal}
           </div>
         )}
@@ -372,7 +386,7 @@ function GestaoChavesPage() {
             type="button"
             onClick={confirmarSalvar}
             disabled={salvando}
-            className="rounded-md bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md bg-green-700 px-5 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
           >
             {salvando ? "Salvando..." : modalTipo === "cadastro" ? "Cadastrar" : "Salvar"}
           </button>

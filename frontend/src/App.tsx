@@ -1,13 +1,15 @@
+import { lazy } from "react";
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import SuapCallbackPage from "./pages/SuapCallbackPage";
-import ChavesPage from "./pages/ChavesPage";
-import HistoricoPage from "./pages/HistoricoPage";
-import GestaoChavesPage from "./pages/GestaoChavesPage";
-import GestaoSolicitantesPage from "./pages/GestaoSolicitantesPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
+
+const ChavesPage = lazy(() => import("./pages/ChavesPage"));
+const HistoricoPage = lazy(() => import("./pages/HistoricoPage"));
+const GestaoChavesPage = lazy(() => import("./pages/GestaoChavesPage"));
+const GestaoSolicitantesPage = lazy(() => import("./pages/GestaoSolicitantesPage"));
 
 function App() {
   return (

@@ -2,7 +2,22 @@ import { AppError } from "./AppError";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-export async function apiFetch(endpoint: string, options: RequestInit = {}) {
+interface CorpoErro {
+  message?: string | string[];
+  code?: string;
+}
+
+function normalizarMensagem(message: string | string[] | undefined): string {
+  if (Array.isArray(message)) {
+    return message.filter(Boolean).join(" ");
+  }
+  return message || "Ocorreu um erro na requisição.";
+}
+
+export async function apiFetch<T = unknown>(
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<T> {
   const token = localStorage.getItem("accessToken");
 
   const headers = new Headers(options.headers);
@@ -20,7 +35,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     headers,
   });
 
-  const dados = await resposta.json().catch(() => null);
+  const corpo: unknown = await resposta.json().catch(() => null);
 
   if (resposta.status === 401 && token) {
     localStorage.removeItem("accessToken");
@@ -30,14 +45,15 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   }
 
   if (!resposta.ok) {
+    const erro = (corpo ?? {}) as CorpoErro;
     throw new AppError(
-      dados?.message || "Ocorreu um erro na requisição.",
-      dados?.code || "ERRO_DESCONHECIDO",
+      normalizarMensagem(erro.message),
+      erro.code || "ERRO_DESCONHECIDO",
       resposta.status,
     );
   }
 
-  return dados;
+  return corpo as T;
 }
 
 export default API_URL;

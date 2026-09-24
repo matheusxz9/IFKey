@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 
 export interface User {
   id: number;
@@ -12,6 +12,7 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  carregando: boolean;
   login: (token: string, user: User) => void;
   logout: () => void;
 }
@@ -36,8 +37,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem("accessToken");
   });
 
-  const tokenRef = useRef(token);
-  tokenRef.current = token;
+  const logout = useCallback(() => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("user");
+  }, []);
+
+  const login = useCallback((novoToken: string, novoUser: User) => {
+    setToken(novoToken);
+    setUser(novoUser);
+    localStorage.setItem("accessToken", novoToken);
+    localStorage.setItem("user", JSON.stringify(novoUser));
+  }, []);
 
   useEffect(() => {
     if (!token || user) return;
@@ -48,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const API_URL = import.meta.env.VITE_API_URL;
         const resposta = await fetch(`${API_URL}/auth/me`, {
-          headers: { Authorization: `Bearer ${tokenRef.current}` },
+          headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,
         });
 
@@ -57,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const dados = await resposta.json();
+        const dados = (await resposta.json()) as User;
         setUser(dados);
         localStorage.setItem("user", JSON.stringify(dados));
       } catch (err) {
@@ -69,21 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     carregarUsuario();
 
     return () => controller.abort();
-  }, [token, user]);
-
-  function login(novoToken: string, novoUser: User) {
-    setToken(novoToken);
-    setUser(novoUser);
-    localStorage.setItem("accessToken", novoToken);
-    localStorage.setItem("user", JSON.stringify(novoUser));
-  }
-
-  function logout() {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("user");
-  }
+  }, [token, user, logout]);
 
   return (
     <AuthContext.Provider
@@ -92,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         isAuthenticated: !!token && !!user,
         isAdmin: user?.perfil === "ADMINISTRADOR",
+        carregando: !!token && !user,
         login,
         logout,
       }}

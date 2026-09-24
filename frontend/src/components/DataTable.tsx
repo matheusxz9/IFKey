@@ -1,22 +1,20 @@
 import type { ReactNode } from "react";
 
-export interface Coluna {
+export interface Coluna<T> {
   key: string;
   titulo: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  render?: (item: any) => ReactNode;
+  render?: (item: T) => ReactNode;
 }
 
 interface DataTableProps<T> {
-  colunas: Coluna[];
+  colunas: Coluna<T>[];
   dados: T[];
   carregando: boolean;
   mensagemVazia?: string;
   chaveId?: keyof T;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function DataTable<T extends Record<string, any>>({
+export default function DataTable<T extends object>({
   colunas,
   dados,
   carregando,
@@ -25,7 +23,9 @@ export default function DataTable<T extends Record<string, any>>({
 }: DataTableProps<T>) {
   if (carregando) {
     return (
-      <div className="p-8 text-center text-gray-400">Carregando...</div>
+      <div className="p-8 text-center text-gray-400" role="status">
+        Carregando...
+      </div>
     );
   }
 
@@ -43,6 +43,7 @@ export default function DataTable<T extends Record<string, any>>({
             {colunas.map((coluna) => (
               <th
                 key={coluna.key}
+                scope="col"
                 className="px-6 py-4 text-left text-sm font-semibold"
               >
                 {coluna.titulo}
@@ -60,7 +61,7 @@ export default function DataTable<T extends Record<string, any>>({
                 <td key={coluna.key} className="px-6 py-4">
                   {coluna.render
                     ? coluna.render(item)
-                    : String(item[coluna.key] ?? "")}
+                    : String((item as Record<string, unknown>)[coluna.key] ?? "")}
                 </td>
               ))}
             </tr>

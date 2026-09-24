@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listarHistoricoEmprestimos } from "../services/emprestimos";
 import type { Emprestimo } from "../types/emprestimo";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
 
-const colunas: Coluna[] = [
+const colunas: Coluna<Emprestimo>[] = [
   {
     key: "chave",
     titulo: "Chave",
@@ -56,29 +56,37 @@ function HistoricoPage() {
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
 
-  async function carregarHistorico(paginaAtual = pagina) {
+  const requisicaoRef = useRef(0);
+
+  async function carregarHistorico(
+    paginaAtual = pagina,
+    filtros: { de?: string; ate?: string } = { de: dataInicio, ate: dataFim },
+  ) {
+    const requisicao = ++requisicaoRef.current;
     try {
       setCarregando(true);
       setErro("");
 
       const resposta = await listarHistoricoEmprestimos({
-        de: dataInicio ? `${dataInicio}T00:00:00` : undefined,
-        ate: dataFim ? `${dataFim}T23:59:59` : undefined,
+        de: filtros.de ? `${filtros.de}T00:00:00` : undefined,
+        ate: filtros.ate ? `${filtros.ate}T23:59:59` : undefined,
         page: paginaAtual,
         limit: 10,
       });
 
+      if (requisicao !== requisicaoRef.current) return;
       setEmprestimos(resposta.data);
       setPagina(resposta.meta.page);
       setTotalPaginas(resposta.meta.totalPages);
     } catch (error) {
+      if (requisicao !== requisicaoRef.current) return;
       setErro(
         error instanceof Error
           ? error.message
           : "Erro ao carregar o histórico.",
       );
     } finally {
-      setCarregando(false);
+      if (requisicao === requisicaoRef.current) setCarregando(false);
     }
   }
 
@@ -129,7 +137,7 @@ function HistoricoPage() {
           <button
             type="button"
             onClick={pesquisar}
-            className="rounded-md bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700 cursor-pointer"
+            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer"
           >
             Pesquisar
           </button>
@@ -137,7 +145,7 @@ function HistoricoPage() {
       </section>
 
       {erro && (
-        <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400">
+        <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400" role="alert">
           {erro}
         </div>
       )}
