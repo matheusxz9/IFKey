@@ -16,21 +16,33 @@ import { DevolverEmprestimoDto } from './dto/devolver-emprestimo.dto';
 import { ListarEmprestimosQueryDto } from './dto/listar-emprestimos.query.dto';
 import { HistoricoEmprestimosQueryDto } from './dto/historico-emprestimos.query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
 
 @ApiTags('emprestimos')
 @Controller('emprestimos')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class EmprestimosController {
   constructor(private readonly emprestimosService: EmprestimosService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @Roles(
+    PerfilAdministrador.ADMINISTRADOR,
+    PerfilAdministrador.GESTOR,
+    PerfilAdministrador.SOLICITANTE,
+  )
   criar(@Body() dto: CriarEmprestimoDto, @CurrentUser() user: { id: number }) {
     return this.emprestimosService.criar(dto, user.id);
   }
 
   @Patch(':id/devolucao')
-  @UseGuards(JwtAuthGuard)
+  @Roles(
+    PerfilAdministrador.ADMINISTRADOR,
+    PerfilAdministrador.GESTOR,
+    PerfilAdministrador.SOLICITANTE,
+  )
   devolver(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: DevolverEmprestimoDto,
@@ -39,16 +51,27 @@ export class EmprestimosController {
   }
 
   @Get()
+  @Roles(
+    PerfilAdministrador.ADMINISTRADOR,
+    PerfilAdministrador.GESTOR,
+    PerfilAdministrador.SOLICITANTE,
+  )
   listar(@Query() query: ListarEmprestimosQueryDto) {
     return this.emprestimosService.listar(query);
   }
 
   @Get('historico')
+  @Roles(PerfilAdministrador.ADMINISTRADOR, PerfilAdministrador.GESTOR)
   historico(@Query() query: HistoricoEmprestimosQueryDto) {
     return this.emprestimosService.historico(query);
   }
 
   @Get(':id')
+  @Roles(
+    PerfilAdministrador.ADMINISTRADOR,
+    PerfilAdministrador.GESTOR,
+    PerfilAdministrador.SOLICITANTE,
+  )
   buscar(@Param('id', ParseIntPipe) id: number) {
     return this.emprestimosService.buscar(id);
   }

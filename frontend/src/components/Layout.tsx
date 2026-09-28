@@ -12,7 +12,7 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
   }`;
 
 export default function Layout() {
-  const { user, isAdmin, logout } = useAuth();
+  const { user, canAccessAdmin, canAccessGestao, canAccessEmprestimos, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuAberto, setMenuAberto] = useState(false);
@@ -74,14 +74,18 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 space-y-1 px-3 py-4">
-          <NavLink to="/chaves" className={linkClass} onClick={() => setMenuAberto(false)}>
-            Chaves
-          </NavLink>
-          <NavLink to="/historico" className={linkClass} onClick={() => setMenuAberto(false)}>
-            Histórico
-          </NavLink>
+          {canAccessEmprestimos && (
+            <>
+              <NavLink to="/chaves" className={linkClass} onClick={() => setMenuAberto(false)}>
+                Chaves
+              </NavLink>
+              <NavLink to="/historico" className={linkClass} onClick={() => setMenuAberto(false)}>
+                Histórico
+              </NavLink>
+            </>
+          )}
 
-          {isAdmin && (
+          {canAccessGestao && (
             <>
               <p className="px-4 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
                 Administração
@@ -94,11 +98,25 @@ export default function Layout() {
               </NavLink>
             </>
           )}
+
+          {canAccessAdmin && (
+            <>
+              <p className="px-4 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Administradores
+              </p>
+              <NavLink to="/admin/administradores" className={linkClass} onClick={() => setMenuAberto(false)}>
+                Gerenciar Administradores
+              </NavLink>
+            </>
+          )}
         </nav>
 
         <div className="border-t border-gray-800 px-5 py-4">
           <p className="truncate text-sm text-gray-400">{user?.nome}</p>
-          <p className="truncate text-xs text-gray-500">{user?.login}</p>
+          <p className="truncate text-xs text-gray-500">
+            {user?.tipo === "admin" ? user?.login : user?.matricula}
+          </p>
+          <p className="truncate text-xs text-gray-600 capitalize">{user?.perfil?.toLowerCase()}</p>
           <button
             type="button"
             onClick={handleLogout}

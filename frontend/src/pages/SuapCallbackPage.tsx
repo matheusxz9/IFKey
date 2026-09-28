@@ -25,13 +25,13 @@ function SuapCallbackPage() {
       try {
         const dados = await apiFetch<{
           accessToken: string;
-          administrador: User;
+          user: User;
         }>("/auth/suap", {
           method: "POST",
           body: JSON.stringify({ code }),
         });
 
-        login(dados.accessToken, dados.administrador);
+        login(dados.accessToken, dados.user);
 
         navigate("/chaves", { replace: true });
       } catch (error) {

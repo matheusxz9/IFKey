@@ -3,12 +3,12 @@ import { useAuth } from "../contexts/AuthContext";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: string;
+  allowedRoles?: string[];
 }
 
 export default function ProtectedRoute({
   children,
-  requiredRole,
+  allowedRoles,
 }: ProtectedRouteProps) {
   const { isAuthenticated, user, carregando } = useAuth();
 
@@ -27,7 +27,7 @@ export default function ProtectedRoute({
     return <Navigate to="/" replace />;
   }
 
-  if (requiredRole && user?.perfil !== requiredRole) {
+  if (allowedRoles && user && !allowedRoles.includes(user.perfil)) {
     return <Navigate to="/chaves" replace />;
   }
 

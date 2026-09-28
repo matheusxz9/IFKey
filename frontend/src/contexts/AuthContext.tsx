@@ -1,17 +1,35 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 
-export interface User {
+export type Perfil = "ADMINISTRADOR" | "GESTOR" | "SOLICITANTE";
+
+export type AdminUser = {
   id: number;
   nome: string;
   login: string;
-  perfil: string;
-}
+  perfil: Exclude<Perfil, "SOLICITANTE">;
+  tipo: "admin";
+};
+
+export type SolicitanteUser = {
+  id: number;
+  nome: string;
+  matricula: string;
+  perfil: "SOLICITANTE";
+  tipo: "solicitante";
+};
+
+export type User = AdminUser | SolicitanteUser;
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isGestor: boolean;
+  isSolicitante: boolean;
+  canAccessAdmin: boolean;
+  canAccessGestao: boolean;
+  canAccessEmprestimos: boolean;
   carregando: boolean;
   login: (token: string, user: User) => void;
   logout: () => void;
@@ -28,6 +46,30 @@ function parseUserFromStorage(): User | null {
     localStorage.removeItem("user");
     return null;
   }
+}
+
+function getRoleHelpers(user: User | null) {
+  if (!user) {
+    return {
+      isAdmin: false,
+      isGestor: false,
+      isSolicitante: false,
+      canAccessAdmin: false,
+      canAccessGestao: false,
+      canAccessEmprestimos: false,
+    };
+  }
+  const isAdmin = user.perfil === "ADMINISTRADOR";
+  const isGestor = user.perfil === "GESTOR";
+  const isSolicitante = user.perfil === "SOLICITANTE";
+  return {
+    isAdmin,
+    isGestor,
+    isSolicitante,
+    canAccessAdmin: isAdmin,
+    canAccessGestao: isAdmin || isGestor,
+    canAccessEmprestimos: isAdmin || isGestor || isSolicitante,
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -83,13 +125,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => controller.abort();
   }, [token, user, logout]);
 
+  const roleHelpers = getRoleHelpers(user);
+
   return (
     <AuthContext.Provider
       value={{
         user,
         token,
         isAuthenticated: !!token && !!user,
-        isAdmin: user?.perfil === "ADMINISTRADOR",
+        ...roleHelpers,
         carregando: !!token && !user,
         login,
         logout,

@@ -6,11 +6,13 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SuapService } from './suap.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RolesGuard } from './roles.guard';
 import { Administrador } from '../administradores/administrador.entity';
+import { Solicitante } from '../solicitantes/solicitante.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Administrador]),
+    TypeOrmModule.forFeature([Administrador, Solicitante]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -20,7 +22,7 @@ import { Administrador } from '../administradores/administrador.entity';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, SuapService, JwtAuthGuard],
-  exports: [JwtAuthGuard, JwtModule],
+  providers: [AuthService, SuapService, JwtAuthGuard, RolesGuard],
+  exports: [JwtAuthGuard, RolesGuard, JwtModule],
 })
 export class AuthModule {}

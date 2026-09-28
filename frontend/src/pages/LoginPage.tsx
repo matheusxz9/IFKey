@@ -21,7 +21,7 @@ function LoginPage() {
         />
 
         <h1 className="mb-8 text-center text-gray-400">
-          Acesso do Administrador
+          Acesso do Administrador / Solicitante
         </h1>
 
         <button
