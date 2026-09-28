@@ -108,15 +108,18 @@ export class EmprestimosService {
       .leftJoinAndSelect('e.solicitante', 's')
       .leftJoinAndSelect('e.chave', 'c')
       .leftJoinAndSelect('e.administrador', 'a')
-      .where('e.status = :status', { status: StatusEmprestimo.DEVOLVIDA })
-      .orderBy('e.dataHoraDevolucao', 'DESC');
+      .orderBy(
+        `CASE WHEN e.status = '${StatusEmprestimo.EMPRESTADA}' THEN 0 ELSE 1 END`,
+        'ASC',
+      )
+      .addOrderBy('e.dataHoraEmprestimo', 'DESC');
     const de = query.de;
     if (de) {
-      qb.andWhere('e.dataHoraDevolucao >= :de', { de: new Date(de) });
+      qb.andWhere('e.dataHoraEmprestimo >= :de', { de: new Date(de) });
     }
     const ate = query.ate;
     if (ate) {
-      qb.andWhere('e.dataHoraDevolucao <= :ate', { ate: new Date(ate) });
+      qb.andWhere('e.dataHoraEmprestimo <= :ate', { ate: new Date(ate) });
     }
     const solicitanteId = query.solicitanteId;
     if (solicitanteId) {

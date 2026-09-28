@@ -10,6 +10,7 @@ const ChavesPage = lazy(() => import("./pages/ChavesPage"));
 const HistoricoPage = lazy(() => import("./pages/HistoricoPage"));
 const GestaoChavesPage = lazy(() => import("./pages/GestaoChavesPage"));
 const GestaoSolicitantesPage = lazy(() => import("./pages/GestaoSolicitantesPage"));
+const GestaoAdministradoresPage = lazy(() => import("./pages/GestaoAdministradoresPage"));
 
 function App() {
   return (
@@ -20,7 +21,9 @@ function App() {
 
         <Route
           element={
-            <ProtectedRoute>
+            <ProtectedRoute
+              allowedRoles={["ADMINISTRADOR", "GESTOR", "SOLICITANTE"]}
+            >
               <Layout />
             </ProtectedRoute>
           }
@@ -30,13 +33,25 @@ function App() {
 
           <Route
             element={
-              <ProtectedRoute requiredRole="ADMINISTRADOR">
+              <ProtectedRoute
+                allowedRoles={["ADMINISTRADOR", "GESTOR"]}
+              >
                 <Outlet />
               </ProtectedRoute>
             }
           >
             <Route path="/admin/chaves" element={<GestaoChavesPage />} />
             <Route path="/admin/solicitantes" element={<GestaoSolicitantesPage />} />
+          </Route>
+
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={["ADMINISTRADOR"]}>
+                <Outlet />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/admin/administradores" element={<GestaoAdministradoresPage />} />
           </Route>
         </Route>
 
