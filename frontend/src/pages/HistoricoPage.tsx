@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listarHistoricoEmprestimos } from "../services/emprestimos";
 import type { Emprestimo } from "../types/emprestimo";
+import { useAuth } from "../contexts/AuthContext";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
 
-const colunas: Coluna[] = [
+const colunas: Coluna<Emprestimo>[] = [
   {
     key: "chave",
     titulo: "Chave",
@@ -46,6 +47,7 @@ function formatarData(data: string) {
 }
 
 function HistoricoPage() {
+  const { isSolicitante, user } = useAuth();
   const [emprestimos, setEmprestimos] = useState<Emprestimo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -56,88 +58,103 @@ function HistoricoPage() {
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
 
-  async function carregarHistorico(paginaAtual = pagina) {
+  const requisicaoRef = useRef(0);
+
+  async function carregarHistorico(
+    paginaAtual = pagina,
+    filtros: { de?: string; ate?: string; solicitanteId?: number } = { de: dataInicio, ate: dataFim },
+  ) {
+    const requisicao = ++requisicaoRef.current;
     try {
       setCarregando(true);
       setErro("");
 
       const resposta = await listarHistoricoEmprestimos({
-        de: dataInicio ? `${dataInicio}T00:00:00` : undefined,
-        ate: dataFim ? `${dataFim}T23:59:59` : undefined,
+        de: filtros.de ? `${filtros.de}T00:00:00` : undefined,
+        ate: filtros.ate ? `${filtros.ate}T23:59:59` : undefined,
+        solicitanteId: filtros.solicitanteId,
         page: paginaAtual,
         limit: 10,
       });
 
+      if (requisicao !== requisicaoRef.current) return;
       setEmprestimos(resposta.data);
       setPagina(resposta.meta.page);
       setTotalPaginas(resposta.meta.totalPages);
     } catch (error) {
+      if (requisicao !== requisicaoRef.current) return;
       setErro(
         error instanceof Error
           ? error.message
           : "Erro ao carregar o histórico.",
       );
     } finally {
-      setCarregando(false);
+      if (requisicao === requisicaoRef.current) setCarregando(false);
     }
   }
 
   /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
-    carregarHistorico(1);
-  }, []);
+    const solicitanteId = isSolicitante && user?.tipo === "solicitante" ? user.id : undefined;
+    carregarHistorico(1, { solicitanteId });
+  }, [isSolicitante, user]);
   /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   function pesquisar() {
     setPagina(1);
-    carregarHistorico(1);
+    const solicitanteId = isSolicitante && user?.tipo === "solicitante" ? user.id : undefined;
+    carregarHistorico(1, { solicitanteId });
   }
 
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
         titulo="Histórico de empréstimos"
-        subtitulo="Consulte os empréstimos que já foram devolvidos."
+        subtitulo={isSolicitante
+          ? "Consulte seus empréstimos ativos e devolvidos."
+          : "Consulte os empréstimos ativos e devolvidos."}
       />
 
-      <section className="mb-6 rounded-2xl border border-gray-800 bg-gray-900 p-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end">
-          <div className="flex-1">
-            <label htmlFor="dataInicio" className="mb-2 block text-sm font-medium text-gray-300">
-              Data inicial
-            </label>
-            <input
-              id="dataInicio"
-              type="date"
-              value={dataInicio}
-              onChange={(event) => setDataInicio(event.target.value)}
-              className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500"
-            />
+      {!isSolicitante && (
+        <section className="mb-6 rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end">
+            <div className="flex-1">
+              <label htmlFor="dataInicio" className="mb-2 block text-sm font-medium text-gray-300">
+                Data inicial
+              </label>
+              <input
+                id="dataInicio"
+                type="date"
+                value={dataInicio}
+                onChange={(event) => setDataInicio(event.target.value)}
+                className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500"
+              />
+            </div>
+            <div className="flex-1">
+              <label htmlFor="dataFim" className="mb-2 block text-sm font-medium text-gray-300">
+                Data final
+              </label>
+              <input
+                id="dataFim"
+                type="date"
+                value={dataFim}
+                onChange={(event) => setDataFim(event.target.value)}
+                className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={pesquisar}
+              className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer"
+            >
+              Pesquisar
+            </button>
           </div>
-          <div className="flex-1">
-            <label htmlFor="dataFim" className="mb-2 block text-sm font-medium text-gray-300">
-              Data final
-            </label>
-            <input
-              id="dataFim"
-              type="date"
-              value={dataFim}
-              onChange={(event) => setDataFim(event.target.value)}
-              className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={pesquisar}
-            className="rounded-md bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700 cursor-pointer"
-          >
-            Pesquisar
-          </button>
-        </div>
-      </section>
+        </section>
+      )}
 
       {erro && (
-        <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400">
+        <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400" role="alert">
           {erro}
         </div>
       )}
@@ -152,8 +169,14 @@ function HistoricoPage() {
         <Pagination
           paginaAtual={pagina}
           totalPaginas={totalPaginas}
-          onAnterior={() => carregarHistorico(pagina - 1)}
-          onProxima={() => carregarHistorico(pagina + 1)}
+          onAnterior={() => {
+            const solicitanteId = isSolicitante && user?.tipo === "solicitante" ? user.id : undefined;
+            carregarHistorico(pagina - 1, { solicitanteId });
+          }}
+          onProxima={() => {
+            const solicitanteId = isSolicitante && user?.tipo === "solicitante" ? user.id : undefined;
+            carregarHistorico(pagina + 1, { solicitanteId });
+          }}
         />
       </section>
     </div>

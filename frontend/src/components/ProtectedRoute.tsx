@@ -3,20 +3,31 @@ import { useAuth } from "../contexts/AuthContext";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: string;
+  allowedRoles?: string[];
 }
 
 export default function ProtectedRoute({
   children,
-  requiredRole,
+  allowedRoles,
 }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, carregando } = useAuth();
+
+  if (carregando) {
+    return (
+      <main
+        className="flex min-h-screen items-center justify-center bg-gray-950 text-gray-400"
+        role="status"
+      >
+        Verificando sessão...
+      </main>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />;
   }
 
-  if (requiredRole && user?.perfil !== requiredRole) {
+  if (allowedRoles && user && !allowedRoles.includes(user.perfil)) {
     return <Navigate to="/chaves" replace />;
   }
 

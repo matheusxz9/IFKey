@@ -24,7 +24,7 @@ export default function ConfirmDialog({
   const corBotao =
     variante === "danger"
       ? "bg-red-600 hover:bg-red-700"
-      : "bg-yellow-600 hover:bg-yellow-700";
+      : "bg-yellow-700 hover:bg-yellow-800";
 
   return (
     <Modal aberto={aberto} onClose={onClose} titulo={titulo} tamanho="sm">

@@ -29,7 +29,7 @@ export async function listarEmprestimos(
 
   const queryString = query.toString();
 
-  const resposta = await apiFetch(
+  const resposta = await apiFetch<ListaEmprestimosResponse>(
     `/emprestimos${queryString ? `?${queryString}` : ""}`,
   );
 
@@ -82,7 +82,7 @@ export async function listarHistoricoEmprestimos(
 
   const queryString = query.toString();
 
-  return apiFetch(
+  return apiFetch<ListaEmprestimosResponse>(
     `/emprestimos/historico${queryString ? `?${queryString}` : ""}`,
   );
 }

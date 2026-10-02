@@ -1,3 +1,5 @@
 export enum PerfilAdministrador {
   ADMINISTRADOR = 'ADMINISTRADOR',
+  GESTOR = 'GESTOR',
+  SOLICITANTE = 'SOLICITANTE',
 }
