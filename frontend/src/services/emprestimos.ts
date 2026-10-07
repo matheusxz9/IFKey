@@ -1,4 +1,4 @@
-import { apiFetch } from "./api";
+import { apiFetch, type ApiFetchOptions } from "./api";
 import type { Emprestimo, ListaEmprestimosResponse } from "../types/emprestimo";
 
 interface CriarEmprestimoParams {
@@ -11,15 +11,20 @@ interface ListarEmprestimosParams {
   status?: string;
 }
 
-export async function criarEmprestimo(dados: CriarEmprestimoParams) {
+export async function criarEmprestimo(
+  dados: CriarEmprestimoParams,
+  options?: ApiFetchOptions,
+) {
   return apiFetch("/emprestimos", {
     method: "POST",
     body: JSON.stringify(dados),
+    ...options,
   });
 }
 
 export async function listarEmprestimos(
   params: ListarEmprestimosParams = {},
+  options?: ApiFetchOptions,
 ): Promise<Emprestimo[]> {
   const query = new URLSearchParams();
 
@@ -31,14 +36,19 @@ export async function listarEmprestimos(
 
   const resposta = await apiFetch<ListaEmprestimosResponse>(
     `/emprestimos${queryString ? `?${queryString}` : ""}`,
+    options,
   );
 
   return resposta.data;
 }
 
-export async function devolverEmprestimo(id: number) {
+export async function devolverEmprestimo(
+  id: number,
+  options?: ApiFetchOptions,
+) {
   return apiFetch(`/emprestimos/${id}/devolucao`, {
     method: "PATCH",
+    ...options,
   });
 }
 
@@ -53,6 +63,7 @@ interface HistoricoEmprestimosParams {
 
 export async function listarHistoricoEmprestimos(
   params: HistoricoEmprestimosParams = {},
+  options?: ApiFetchOptions,
 ): Promise<ListaEmprestimosResponse> {
   const query = new URLSearchParams();
 
@@ -84,5 +95,6 @@ export async function listarHistoricoEmprestimos(
 
   return apiFetch<ListaEmprestimosResponse>(
     `/emprestimos/historico${queryString ? `?${queryString}` : ""}`,
+    options,
   );
 }

@@ -33,8 +33,11 @@ export class EmprestimosController {
     PerfilAdministrador.GESTOR,
     PerfilAdministrador.SOLICITANTE,
   )
-  criar(@Body() dto: CriarEmprestimoDto, @CurrentUser() user: { id: number }) {
-    return this.emprestimosService.criar(dto, user.id);
+  criar(
+    @Body() dto: CriarEmprestimoDto,
+    @CurrentUser() user: { id: number; perfil: string },
+  ) {
+    return this.emprestimosService.criar(dto, user.id, user.perfil);
   }
 
   @Patch(':id/devolucao')
@@ -61,9 +64,16 @@ export class EmprestimosController {
   }
 
   @Get('historico')
-  @Roles(PerfilAdministrador.ADMINISTRADOR, PerfilAdministrador.GESTOR)
-  historico(@Query() query: HistoricoEmprestimosQueryDto) {
-    return this.emprestimosService.historico(query);
+  @Roles(
+    PerfilAdministrador.ADMINISTRADOR,
+    PerfilAdministrador.GESTOR,
+    PerfilAdministrador.SOLICITANTE,
+  )
+  historico(
+    @Query() query: HistoricoEmprestimosQueryDto,
+    @CurrentUser() user: { id: number; perfil: string },
+  ) {
+    return this.emprestimosService.historico(query, user);
   }
 
   @Get(':id')

@@ -5,6 +5,7 @@ import { Administrador } from './administradores/administrador.entity';
 import { Solicitante } from './solicitantes/solicitante.entity';
 import { Chave } from './chaves/chave.entity';
 import { Emprestimo } from './emprestimos/emprestimo.entity';
+import { RefreshToken } from './auth/refresh-token.entity';
 
 config();
 
@@ -15,7 +16,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
   database: process.env.DB_NAME || 'ifkey_db',
-  entities: [Administrador, Solicitante, Chave, Emprestimo],
+  entities: [Administrador, Solicitante, Chave, Emprestimo, RefreshToken],
   migrations: ['src/migrations/*.ts'],
   migrationsTableName: 'migrations',
 });

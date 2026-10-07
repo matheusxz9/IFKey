@@ -40,6 +40,7 @@ function GestaoChavesPage() {
 
   const [chaveParaInativar, setChaveParaInativar] = useState<Chave | null>(null);
   const [inativando, setInativando] = useState(false);
+  const [reativando, setReativando] = useState(false);
 
   const requisicaoRef = useRef(0);
 
@@ -173,6 +174,19 @@ function GestaoChavesPage() {
     }
   }
 
+  async function executarReativacao(chave: Chave) {
+    try {
+      setReativando(true);
+      await atualizarChave(chave.id, { ativo: true });
+      toast.success("Chave reativada com sucesso!");
+      await carregarChaves(pagina);
+    } catch {
+      toast.error("Erro ao reativar a chave. Tente novamente.");
+    } finally {
+      setReativando(false);
+    }
+  }
+
   const colunas: Coluna<Chave>[] = [
     { key: "codigo", titulo: "Código" },
     { key: "descricao", titulo: "Descrição" },
@@ -226,6 +240,17 @@ function GestaoChavesPage() {
               className="rounded-md border border-red-800 px-3 py-1 text-sm font-medium text-red-400 hover:bg-red-950/40 cursor-pointer"
             >
               Inativar
+            </button>
+          )}
+          {!chave.ativo && (
+            <button
+              type="button"
+              aria-label={`Reativar chave ${chave.codigo}`}
+              onClick={() => executarReativacao(chave)}
+              disabled={reativando}
+              className="rounded-md border border-green-800 px-3 py-1 text-sm font-medium text-green-400 hover:bg-green-950/40 disabled:opacity-40 cursor-pointer"
+            >
+              Reativar
             </button>
           )}
         </div>

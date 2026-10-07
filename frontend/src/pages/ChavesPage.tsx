@@ -44,58 +44,73 @@ function ChavesPage() {
   const [emprestimoSelecionado, setEmprestimoSelecionado] = useState<Emprestimo | null>(null);
   const [devolvendo, setDevolvendo] = useState(false);
 
-  const requisicaoChavesRef = useRef(0);
-  const requisicaoEmprestimosRef = useRef(0);
+  const abortChavesRef = useRef<AbortController | null>(null);
+  const abortEmprestimosRef = useRef<AbortController | null>(null);
 
   async function carregarChaves(
     paginaAtual = pagina,
     filtros: FiltrosChaves = { busca, status },
   ) {
-    const requisicao = ++requisicaoChavesRef.current;
+    abortChavesRef.current?.abort();
+    const controller = new AbortController();
+    abortChavesRef.current = controller;
     try {
       setCarregando(true);
       setErro("");
-      const resposta = await listarChaves({
-        busca: filtros.busca || undefined,
-        status: filtros.status || undefined,
-        page: paginaAtual,
-        limit: 10,
-      });
-      if (requisicao !== requisicaoChavesRef.current) return;
+      const resposta = await listarChaves(
+        {
+          busca: filtros.busca || undefined,
+          status: filtros.status || undefined,
+          page: paginaAtual,
+          limit: 10,
+        },
+        { signal: controller.signal },
+      );
+      if (controller.signal.aborted) return;
       setChaves(resposta.data);
       setPagina(resposta.meta.page);
       setTotalPaginas(resposta.meta.totalPages);
     } catch (error) {
-      if (requisicao !== requisicaoChavesRef.current) return;
+      if (controller.signal.aborted) return;
       setErro(error instanceof Error ? error.message : "Erro ao carregar as chaves.");
     } finally {
-      if (requisicao === requisicaoChavesRef.current) setCarregando(false);
+      if (!controller.signal.aborted) setCarregando(false);
     }
   }
 
   async function carregarEmprestimos() {
-    const requisicao = ++requisicaoEmprestimosRef.current;
+    abortEmprestimosRef.current?.abort();
+    const controller = new AbortController();
+    abortEmprestimosRef.current = controller;
     try {
       setCarregandoEmprestimos(true);
       setErroEmprestimos("");
-      const resposta = await listarEmprestimos({ status: "EMPRESTADA" });
-      if (requisicao !== requisicaoEmprestimosRef.current) return;
+      const resposta = await listarEmprestimos(
+        { status: "EMPRESTADA" },
+        { signal: controller.signal },
+      );
+      if (controller.signal.aborted) return;
       setEmprestimos(resposta);
     } catch (error) {
-      if (requisicao !== requisicaoEmprestimosRef.current) return;
+      if (controller.signal.aborted) return;
       console.error("Erro ao carregar empréstimos:", error);
       setErroEmprestimos("Erro ao carregar os empréstimos ativos.");
     } finally {
-      if (requisicao === requisicaoEmprestimosRef.current) setCarregandoEmprestimos(false);
+      if (!controller.signal.aborted) setCarregandoEmprestimos(false);
     }
   }
 
-  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     carregarChaves(1);
+     
     carregarEmprestimos();
+    return () => {
+      abortChavesRef.current?.abort();
+      abortEmprestimosRef.current?.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   function buscar() {
     setPagina(1);

@@ -51,6 +51,7 @@ function GestaoSolicitantesPage() {
 
   const [solicitanteParaInativar, setSolicitanteParaInativar] = useState<Solicitante | null>(null);
   const [inativando, setInativando] = useState(false);
+  const [reativando, setReativando] = useState(false);
 
   const requisicaoRef = useRef(0);
 
@@ -174,6 +175,19 @@ function GestaoSolicitantesPage() {
     }
   }
 
+  async function executarReativacao(solicitante: Solicitante) {
+    try {
+      setReativando(true);
+      await atualizarSolicitante(solicitante.id, { ativo: true });
+      toast.success("Solicitante reativado com sucesso!");
+      await carregarSolicitantes(pagina);
+    } catch {
+      toast.error("Erro ao reativar o solicitante. Tente novamente.");
+    } finally {
+      setReativando(false);
+    }
+  }
+
   const colunas: Coluna<Solicitante>[] = [
     { key: "nome", titulo: "Nome" },
     {
@@ -217,6 +231,13 @@ function GestaoSolicitantesPage() {
               onClick={() => setSolicitanteParaInativar(s)}
               className="rounded-md border border-red-800 px-3 py-1 text-sm font-medium text-red-400 hover:bg-red-950/40 cursor-pointer">
               Inativar
+            </button>
+          )}
+          {!s.ativo && (
+            <button type="button" aria-label={`Reativar solicitante ${s.nome}`}
+              onClick={() => executarReativacao(s)} disabled={reativando}
+              className="rounded-md border border-green-800 px-3 py-1 text-sm font-medium text-green-400 hover:bg-green-950/40 disabled:opacity-40 cursor-pointer">
+              Reativar
             </button>
           )}
         </div>

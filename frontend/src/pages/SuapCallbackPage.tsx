@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiFetch } from "../services/api";
 import { useAuth, type User } from "../contexts/AuthContext";
 
 function SuapCallbackPage() {
@@ -23,20 +22,40 @@ function SuapCallbackPage() {
       }
 
       try {
-        const dados = await apiFetch<{
-          accessToken: string;
-          user: User;
-        }>("/auth/suap", {
+        const API_URL = import.meta.env.VITE_API_URL;
+        const resposta = await fetch(`${API_URL}/auth/suap`, {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code }),
         });
 
-        login(dados.accessToken, dados.user);
+        const corpo = (await resposta.json().catch(() => null)) as {
+          message?: string | string[];
+          accessToken?: string;
+          refreshToken?: string;
+          user?: User;
+        } | null;
+
+        if (!resposta.ok) {
+          const mensagem = Array.isArray(corpo?.message)
+            ? corpo.message.filter(Boolean).join(" ")
+            : corpo?.message;
+          setErro(mensagem || "Erro ao realizar o login.");
+          return;
+        }
+
+        if (!corpo?.accessToken || !corpo.refreshToken || !corpo.user) {
+          setErro("Resposta inválida do servidor de login.");
+          return;
+        }
+
+        localStorage.setItem("refreshToken", corpo.refreshToken);
+        login(corpo.accessToken, corpo.user);
 
         navigate("/chaves", { replace: true });
-      } catch (error) {
+      } catch {
         setErro(
-          error instanceof Error ? error.message : "Erro ao realizar o login.",
+          "Não foi possível conectar ao servidor de login. Verifique se o backend está rodando.",
         );
       }
     }

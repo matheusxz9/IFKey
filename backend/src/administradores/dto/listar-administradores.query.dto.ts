@@ -1,6 +1,6 @@
 import { IsOptional, IsString, IsEnum, IsBoolean } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import { PerfilAdministrador } from '../../common/enums/perfil-administrador.enum';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
@@ -22,7 +22,7 @@ export class ListarAdministradoresQueryDto extends PaginationQueryDto {
 
   @ApiPropertyOptional({ example: true })
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => value === 'true')
   @IsBoolean()
   ativo?: boolean;
 }

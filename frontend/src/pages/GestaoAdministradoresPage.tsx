@@ -50,6 +50,7 @@ function GestaoAdministradoresPage() {
 
   const [administradorParaInativar, setAdministradorParaInativar] = useState<Administrador | null>(null);
   const [inativando, setInativando] = useState(false);
+  const [reativando, setReativando] = useState(false);
 
   const requisicaoRef = useRef(0);
 
@@ -170,6 +171,19 @@ function GestaoAdministradoresPage() {
     }
   }
 
+  async function executarReativacao(administrador: Administrador) {
+    try {
+      setReativando(true);
+      await atualizarAdministrador(administrador.id, { ativo: true });
+      toast.success("Administrador reativado com sucesso!");
+      await carregarAdministradores(pagina);
+    } catch {
+      toast.error("Erro ao reativar o administrador. Tente novamente.");
+    } finally {
+      setReativando(false);
+    }
+  }
+
   const colunas: Coluna<Administrador>[] = [
     { key: "nome", titulo: "Nome" },
     { key: "login", titulo: "Login" },
@@ -212,6 +226,13 @@ function GestaoAdministradoresPage() {
               onClick={() => setAdministradorParaInativar(a)}
               className="rounded-md border border-red-800 px-3 py-1 text-sm font-medium text-red-400 hover:bg-red-950/40 cursor-pointer">
               Inativar
+            </button>
+          )}
+          {!a.ativo && (
+            <button type="button" aria-label={`Reativar administrador ${a.nome}`}
+              onClick={() => executarReativacao(a)} disabled={reativando}
+              className="rounded-md border border-green-800 px-3 py-1 text-sm font-medium text-green-400 hover:bg-green-950/40 disabled:opacity-40 cursor-pointer">
+              Reativar
             </button>
           )}
         </div>

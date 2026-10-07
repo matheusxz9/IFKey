@@ -9,15 +9,16 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
 import { Administrador } from '../administradores/administrador.entity';
 import { Solicitante } from '../solicitantes/solicitante.entity';
+import { RefreshToken } from './refresh-token.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Administrador, Solicitante]),
+    TypeOrmModule.forFeature([Administrador, Solicitante, RefreshToken]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '8h' },
+        signOptions: { expiresIn: '15m' },
       }),
     }),
   ],

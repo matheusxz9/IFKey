@@ -1,4 +1,4 @@
-import { apiFetch } from "./api";
+import { apiFetch, type ApiFetchOptions } from "./api";
 import type { Chave, ListaChavesResponse, StatusChave } from "../types/chave";
 
 interface ListarChavesParams {
@@ -11,6 +11,7 @@ interface ListarChavesParams {
 
 export async function listarChaves(
   params: ListarChavesParams = {},
+  options?: ApiFetchOptions,
 ): Promise<ListaChavesResponse> {
   const query = new URLSearchParams();
 
@@ -36,11 +37,14 @@ export async function listarChaves(
 
   const queryString = query.toString();
 
-  return apiFetch<ListaChavesResponse>(`/chaves${queryString ? `?${queryString}` : ""}`);
+  return apiFetch<ListaChavesResponse>(`/chaves${queryString ? `?${queryString}` : ""}`, options);
 }
 
-export async function buscarChave(id: number): Promise<Chave> {
-  return apiFetch<Chave>(`/chaves/${id}`);
+export async function buscarChave(
+  id: number,
+  options?: ApiFetchOptions,
+): Promise<Chave> {
+  return apiFetch<Chave>(`/chaves/${id}`, options);
 }
 
 interface CriarChaveParams {
@@ -49,10 +53,14 @@ interface CriarChaveParams {
   localizacao: string;
 }
 
-export async function criarChave(dados: CriarChaveParams): Promise<Chave> {
+export async function criarChave(
+  dados: CriarChaveParams,
+  options?: ApiFetchOptions,
+): Promise<Chave> {
   return apiFetch<Chave>("/chaves", {
     method: "POST",
     body: JSON.stringify(dados),
+    ...options,
   });
 }
 
@@ -66,15 +74,21 @@ interface AtualizarChaveParams {
 export async function atualizarChave(
   id: number,
   dados: AtualizarChaveParams,
+  options?: ApiFetchOptions,
 ): Promise<Chave> {
   return apiFetch<Chave>(`/chaves/${id}`, {
     method: "PATCH",
     body: JSON.stringify(dados),
+    ...options,
   });
 }
 
-export async function inativarChave(id: number): Promise<void> {
+export async function inativarChave(
+  id: number,
+  options?: ApiFetchOptions,
+): Promise<void> {
   return apiFetch<void>(`/chaves/${id}`, {
     method: "DELETE",
+    ...options,
   });
 }
