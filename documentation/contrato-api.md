@@ -104,6 +104,7 @@ Erro de validação (`class-validator`), HTTP 400:
 | POST | `/administradores` | ADMIN | Cadastra administrador |
 | PATCH | `/administradores/:id` | ADMIN | Atualiza administrador (parcial) |
 | DELETE | `/administradores/:id` | ADMIN | Inativa administrador (soft delete) |
+| POST | `/administradores/:id/converter-solicitante` | ADMIN | Inativa o administrador e o cadastra como solicitante |
 
 > Todas as rotas (exceto `/auth/suap` e `/auth/refresh`) exigem `Authorization: Bearer <JWT>`;
 > os perfis são checados por rota (coluna Auth). `401 NAO_AUTENTICADO` sem token válido/expirado;
@@ -111,7 +112,8 @@ Erro de validação (`class-validator`), HTTP 400:
 
 > **Solicitante escopado:** quando o autenticado é `SOLICITANTE`, ele opera apenas sobre si
 > mesmo — `POST /emprestimos` ignora o `solicitanteId` enviado (usa o próprio id) e
-> `GET /emprestimos/historico` retorna somente os registros dele.
+> `GET /emprestimos` e `GET /emprestimos/historico` retornam somente os registros dele
+> (o filtro `solicitanteId` da query é ignorado).
 
 > **Atenção NestJS:** declarar `GET /emprestimos/historico` **antes** de `GET /emprestimos/:id`,
 > senão `historico` é interpretado como `:id`.
@@ -140,9 +142,12 @@ POST /auth/suap
 }
 ```
 
-- Resolução da identidade no SUAP: primeiro por `login` (administrador ativo); se não houver,
-  por `matrícula` (solicitante ativo). Sem cadastro ativo correspondente → `403 SEM_PERMISSAO`.
-- O `login` do administrador é derivado da conta SUAP (parte antes do `@` do e-mail acadêmico).
+- Resolução da identidade no SUAP: o backend extrai da conta SUAP um conjunto de identificadores
+  (`identificacao`, `matricula` — no nível raiz ou dentro de `vinculo` — e a parte antes do `@` dos
+  e-mails). Procura primeiro por `login` (administrador ativo); se não houver, por `matrícula`
+  (solicitante ativo). Sem cadastro ativo correspondente → `403 SEM_PERMISSAO`.
+- O `login` do administrador corresponde ao usuário do SUAP (`identificacao`, normalmente a parte
+  antes do `@`); `matricula` é o número retornado pelo SUAP.
 - `POST /auth/refresh` (público) — body `{ "refreshToken": "<token>" }` → novo par
   `{ accessToken, refreshToken, user }`. O refresh antigo é **revogado** a cada uso.
   Token inválido/expirado → `403 SEM_PERMISSAO`.
@@ -180,8 +185,10 @@ Ordenação: `nome` asc.
 
 - `201` → objeto criado (`ativo` default `true`)
 - `400 VALIDACAO` · `409 MATRICULA_DUPLICADA`
+- `409 IDENTIFICADOR_DUPLICADO` quando a `matricula` coincide com o `login` de um administrador (mesma pessoa com dois cadastros)
 
 **`PATCH /solicitantes/:id`** — qualquer subconjunto de `nome`, `tipo`, `matricula`, `contato`, `ativo`.
+Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLICADA` / `IDENTIFICADOR_DUPLICADO`).
 
 **`DELETE /solicitantes/:id`**
 
@@ -300,10 +307,28 @@ Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `da
 
 - `201` → objeto criado (`ativo` default `true`)
 - `400 VALIDACAO` · `409 LOGIN_DUPLICADO` (unicidade case-insensitive)
+- `409 IDENTIFICADOR_DUPLICADO` quando o `login` coincide com a `matricula` de um solicitante
+- `perfil` aceita apenas `ADMINISTRADOR` ou `GESTOR`
 
-**`PATCH /administradores/:id`** (apenas ADMIN) — subconjunto de `nome`, `login`, `perfil`, `ativo`.
+**`PATCH /administradores/:id`** (apenas ADMIN) — subconjunto de `nome`, `perfil`, `ativo`
+(`perfil` só aceita `ADMINISTRADOR`/`GESTOR`).
+- `409 ULTIMO_ADMINISTRADOR` se a alteração deixaria o sistema sem nenhum `ADMINISTRADOR` ativo.
 
 **`DELETE /administradores/:id`** (apenas ADMIN) — `204` (soft delete, `ativo = false`).
+- `409 ULTIMO_ADMINISTRADOR` se for o último `ADMINISTRADOR` ativo.
+
+**`POST /administradores/:id/converter-solicitante`** (apenas ADMIN)
+
+```json
+{ "tipo": "SERVIDOR", "matricula": "2024112345", "contato": "joao.souza@ifrn.edu.br" }
+```
+
+- `matricula` opcional (default: o `login` do administrador); `contato` opcional
+- `201` → `Solicitante` criado (`ativo = true`) **e** o administrador inativado (`ativo = false`)
+- `400 VALIDACAO` · `404 NAO_ENCONTRADO`
+- `409 MATRICULA_DUPLICADA` (já existe solicitante com a matrícula)
+- `409 IDENTIFICADOR_DUPLICADO` (matrícula pertence a outro administrador)
+- `409 ULTIMO_ADMINISTRADOR` (não é possível converter o último administrador ativo)
 
 > O `login` do administrador corresponde ao login do SUAP (parte antes do `@`).
 
@@ -322,7 +347,14 @@ Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `da
 8. **Datas coerentes:** `dataHoraDevolucao`, quando existir, nunca é anterior a `dataHoraEmprestimo`
    (constraint `CK_EMPRESTIMO_DATAS` do DER).
 9. **Solicitante escopado:** autenticado como `SOLICITANTE` cria empréstimo apenas para si e vê
-   apenas o próprio histórico.
+   apenas o próprio histórico (em `GET /emprestimos` e `GET /emprestimos/historico`).
+10. **Unicidade entre entidades:** `solicitante.matricula` e `administrador.login` representam a
+    mesma pessoa no SUAP — colisão em qualquer sentido (solicitante com matrícula igual a um login
+    de administrador, ou administrador com login igual a uma matrícula de solicitante) é bloqueada
+    → `409 IDENTIFICADOR_DUPLICADO`.
+11. **Salvaguarda do último administrador:** o sistema nunca pode ficar sem nenhum `ADMINISTRADOR`
+    ativo — inativar, rebaixar para `GESTOR` ou converter o último `ADMINISTRADOR` ativo
+    → `409 ULTIMO_ADMINISTRADOR`.
 
 ## 7. Códigos de status
 
@@ -339,7 +371,8 @@ Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `da
 | 500 | Erro inesperado |
 
 Códigos `409` possíveis: `MATRICULA_DUPLICADA`, `CODIGO_CHAVE_DUPLICADO`, `LOGIN_DUPLICADO`,
-`CHAVE_INDISPONIVEL`, `SOLICITANTE_INATIVO`, `EMPRESTIMO_JA_DEVOLVIDO`, `RECURSO_COM_EMPRESTIMO_ATIVO`.
+`IDENTIFICADOR_DUPLICADO`, `CHAVE_INDISPONIVEL`, `SOLICITANTE_INATIVO`, `EMPRESTIMO_JA_DEVOLVIDO`,
+`RECURSO_COM_EMPRESTIMO_ATIVO`, `ULTIMO_ADMINISTRADOR`.
 
 ## 8. Mapeamento DER → API
 
