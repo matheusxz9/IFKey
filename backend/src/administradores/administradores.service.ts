@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Administrador } from './administrador.entity';
+import { LoginDuplicadoException } from '../common/exceptions/app.exception';
 import { CriarAdministradorDto } from './dto/criar-administrador.dto';
 import { AtualizarAdministradorDto } from './dto/atualizar-administrador.dto';
 import { ListarAdministradoresQueryDto } from './dto/listar-administradores.query.dto';
@@ -46,7 +47,15 @@ export class AdministradoresService {
   }
 
   async criar(dto: CriarAdministradorDto) {
-    const admin = this.repo.create(dto);
+    const login = dto.login.trim();
+    const duplicado = await this.repo
+      .createQueryBuilder('admin')
+      .where('LOWER(admin.login) = LOWER(:login)', { login })
+      .getOne();
+    if (duplicado) {
+      throw new LoginDuplicadoException();
+    }
+    const admin = this.repo.create({ ...dto, login });
     return this.repo.save(admin);
   }
 

@@ -22,6 +22,12 @@ export class MatriculaDuplicadaException extends AppException {
   }
 }
 
+export class LoginDuplicadoException extends AppException {
+  constructor(message = 'Login já cadastrado.') {
+    super(message, HttpStatus.CONFLICT, CodigoErro.LOGIN_DUPLICADO);
+  }
+}
+
 export class CodigoChaveDuplicadoException extends AppException {
   constructor(message = 'Código da chave já cadastrada.') {
     super(message, HttpStatus.CONFLICT, CodigoErro.CODIGO_CHAVE_DUPLICADO);
