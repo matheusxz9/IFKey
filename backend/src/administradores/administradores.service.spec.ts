@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AdministradoresService } from './administradores.service';
 import { Administrador } from './administrador.entity';
+import { Solicitante } from '../solicitantes/solicitante.entity';
 
 describe('AdministradoresService', () => {
   let service: AdministradoresService;
@@ -27,6 +28,10 @@ describe('AdministradoresService', () => {
         {
           provide: getRepositoryToken(Administrador),
           useValue: mockRepo,
+        },
+        {
+          provide: getRepositoryToken(Solicitante),
+          useValue: {},
         },
       ],
     }).compile();

@@ -2,10 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Solicitante } from './solicitante.entity';
+import { Administrador } from '../administradores/administrador.entity';
 import { CriarSolicitanteDto } from './dto/criar-solicitante.dto';
 import { AtualizarSolicitanteDto } from './dto/atualizar-solicitante.dto';
 import { ListarSolicitantesQueryDto } from './dto/listar-solicitantes.query.dto';
 import {
+  IdentificadorDuplicadoException,
   MatriculaDuplicadaException,
   NaoEncontradoException,
   RecursoComEmprestimoAtivoException,
@@ -20,6 +22,8 @@ export class SolicitantesService {
     private readonly repo: Repository<Solicitante>,
     @InjectRepository(Emprestimo)
     private readonly emprestimoRepo: Repository<Emprestimo>,
+    @InjectRepository(Administrador)
+    private readonly adminRepo: Repository<Administrador>,
   ) {}
 
   async listar(query: ListarSolicitantesQueryDto) {
@@ -70,17 +74,29 @@ export class SolicitantesService {
     return solicitante;
   }
 
+  private async garantirIdentificadorLivre(matricula: string): Promise<void> {
+    const admin = await this.adminRepo
+      .createQueryBuilder('a')
+      .where('LOWER(a.login) = LOWER(:matricula)', { matricula })
+      .getOne();
+    if (admin) {
+      throw new IdentificadorDuplicadoException(
+        'Este identificador já pertence a um administrador cadastrado.',
+      );
+    }
+  }
+
   async criar(dto: CriarSolicitanteDto): Promise<Solicitante> {
+    const matricula = dto.matricula.trim();
     const duplicada = await this.repo
       .createQueryBuilder('s')
-      .where('LOWER(s.matricula) = LOWER(:matricula)', {
-        matricula: dto.matricula,
-      })
+      .where('LOWER(s.matricula) = LOWER(:matricula)', { matricula })
       .getOne();
     if (duplicada) {
       throw new MatriculaDuplicadaException();
     }
-    const solicitante = this.repo.create({ ...dto, ativo: true });
+    await this.garantirIdentificadorLivre(matricula);
+    const solicitante = this.repo.create({ ...dto, matricula, ativo: true });
     return this.repo.save(solicitante);
   }
 
@@ -99,6 +115,7 @@ export class SolicitantesService {
       if (duplicada) {
         throw new MatriculaDuplicadaException();
       }
+      await this.garantirIdentificadorLivre(matricula);
     }
     if (dto.ativo === false) {
       const temEmprestimoAtivo = await this.emprestimoRepo.exists({

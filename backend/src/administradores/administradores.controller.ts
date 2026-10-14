@@ -15,6 +15,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { AdministradoresService } from './administradores.service';
 import { CriarAdministradorDto } from './dto/criar-administrador.dto';
 import { AtualizarAdministradorDto } from './dto/atualizar-administrador.dto';
+import { ConverterSolicitanteDto } from './dto/converter-solicitante.dto';
 import { ListarAdministradoresQueryDto } from './dto/listar-administradores.query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -45,6 +46,15 @@ export class AdministradoresController {
   @Roles(PerfilAdministrador.ADMINISTRADOR)
   criar(@Body() dto: CriarAdministradorDto) {
     return this.administradoresService.criar(dto);
+  }
+
+  @Post(':id/converter-solicitante')
+  @Roles(PerfilAdministrador.ADMINISTRADOR)
+  converterEmSolicitante(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ConverterSolicitanteDto,
+  ) {
+    return this.administradoresService.converterEmSolicitante(id, dto);
   }
 
   @Patch(':id')

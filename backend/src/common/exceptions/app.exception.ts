@@ -56,6 +56,20 @@ export class RecursoComEmprestimoAtivoException extends AppException {
   }
 }
 
+export class IdentificadorDuplicadoException extends AppException {
+  constructor(message = 'Este identificador já está em uso.') {
+    super(message, HttpStatus.CONFLICT, CodigoErro.IDENTIFICADOR_DUPLICADO);
+  }
+}
+
+export class UltimoAdministradorException extends AppException {
+  constructor(
+    message = 'Operação bloqueada: é necessário manter ao menos um administrador ativo.',
+  ) {
+    super(message, HttpStatus.CONFLICT, CodigoErro.ULTIMO_ADMINISTRADOR);
+  }
+}
+
 export class NaoEncontradoException extends AppException {
   constructor(message = 'Recurso não encontrado.') {
     super(message, HttpStatus.NOT_FOUND, CodigoErro.NAO_ENCONTRADO);
