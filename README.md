@@ -5,16 +5,15 @@ Sistema de controle de empréstimo de chaves do IFRN. Projeto integrador I — 4
 ## Tecnologias
 
 - **Backend:** NestJS + TypeORM + PostgreSQL
-- **Frontend:** React + Vite + TypeScript — nas branches `Frontend-*`
+- **Frontend:** React + Vite + TypeScript
 
 ## Estrutura do repositório
 
 ```
 ├── backend/         # API (NestJS) — veja backend/README.md
+├── frontend/        # SPA (React + Vite) — veja frontend/README.md
 └── documentation/   # Diagramas e contrato da API
 ```
-
-> O frontend (React + Vite) é desenvolvido nas branches `Frontend-*` e ainda não está na `main`.
 
 ## Rodando o backend (jeito mais rápido)
 
@@ -39,8 +38,20 @@ npm run admin:add -- <login-do-suap> "<Nome Completo>"
 
 Documentação completa, testes de rotas e solução de problemas: **[`backend/README.md`](backend/README.md)**.
 
+## Rodando o frontend
+
+Pré-requisito: o backend no ar (acima).
+
+```bash
+cd frontend
+npm install
+cp .env.example .env   # ajuste VITE_API_URL, VITE_CLIENT_ID e VITE_REDIRECT_URI
+npm run dev            # abre em http://localhost:5173
+```
+
 ## Documentação
 
 - [`backend/README.md`](backend/README.md) — como rodar, testar e usar a API
+- [`frontend/README.md`](frontend/README.md) — como rodar a SPA
 - [`documentation/contrato-api.md`](documentation/contrato-api.md) — contrato da API
 - [`documentation/diagrams`](documentation/diagrams) — DER e diagrama de casos de uso
