@@ -11,7 +11,7 @@ export class InitialSchema1789319126829 implements MigrationInterface {
       `CREATE TABLE "solicitante" ("id" SERIAL NOT NULL, "nome" character varying(120) NOT NULL, "tipo" character varying(20) NOT NULL, "matricula" character varying(30) NOT NULL, "contato" character varying(120), "ativo" boolean NOT NULL DEFAULT true, CONSTRAINT "UQ_df4eff3856882b1691a3921327d" UNIQUE ("matricula"), CONSTRAINT "PK_fd17ff6b39f8d1e3ac36250a286" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "emprestimo" ("id" SERIAL NOT NULL, "data_hora_emprestimo" TIMESTAMP NOT NULL DEFAULT now(), "data_hora_devolucao" TIMESTAMP WITH TIME ZONE, "observacoes" character varying(255), "status" character varying(20) NOT NULL DEFAULT 'EMPRESTADA', "id_solicitante" integer, "id_chave" integer, "id_administrador_registro" integer, CONSTRAINT "PK_d8f9a723b1f2fd57102a5c424f8" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "emprestimo" ("id" SERIAL NOT NULL, "data_hora_emprestimo" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "data_hora_devolucao" TIMESTAMP WITH TIME ZONE, "observacoes" character varying(255), "status" character varying(20) NOT NULL DEFAULT 'EMPRESTADA', "id_solicitante" integer, "id_chave" integer, "id_administrador_registro" integer, CONSTRAINT "PK_d8f9a723b1f2fd57102a5c424f8" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE TABLE "administrador" ("id" SERIAL NOT NULL, "nome" character varying(120) NOT NULL, "login" character varying(80) NOT NULL, "perfil" character varying(20) NOT NULL, "ativo" boolean NOT NULL DEFAULT true, CONSTRAINT "UQ_a7a7dd8a14f8b49c923a4905b51" UNIQUE ("login"), CONSTRAINT "PK_a84433082c320e8c25abe76c52e" PRIMARY KEY ("id"))`,
