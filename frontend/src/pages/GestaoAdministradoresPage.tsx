@@ -272,7 +272,6 @@ function GestaoAdministradoresPage() {
             <option value="">Todos os perfis</option>
             <option value="ADMINISTRADOR">Administrador</option>
             <option value="GESTOR">Gestor</option>
-            <option value="SOLICITANTE">Solicitante</option>
           </select>
           <select value={ativo === "" ? "" : String(ativo)} aria-label="Filtrar por situação do cadastro"
             onChange={(e) => {
@@ -328,7 +327,6 @@ function GestaoAdministradoresPage() {
             className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
             <option value="ADMINISTRADOR">Administrador</option>
             <option value="GESTOR">Gestor</option>
-            <option value="SOLICITANTE">Solicitante</option>
           </select>
         </div>
         {erroModal && (
