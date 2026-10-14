@@ -131,13 +131,18 @@ export class EmprestimosService {
     return emprestimo;
   }
 
-  async listar(query: ListarEmprestimosQueryDto) {
+  async listar(
+    query: ListarEmprestimosQueryDto,
+    user?: { id: number; perfil: string },
+  ) {
+    const solicitanteId =
+      user?.perfil === PerfilAdministrador.SOLICITANTE
+        ? user.id
+        : query.solicitanteId;
     const [data, total] = await this.repo.findAndCount({
       where: {
         ...(query.status ? { status: query.status } : {}),
-        ...(query.solicitanteId
-          ? { solicitante: { id: query.solicitanteId } }
-          : {}),
+        ...(solicitanteId ? { solicitante: { id: solicitanteId } } : {}),
         ...(query.chaveId ? { chave: { id: query.chaveId } } : {}),
       },
       relations: {

@@ -59,8 +59,11 @@ export class EmprestimosController {
     PerfilAdministrador.GESTOR,
     PerfilAdministrador.SOLICITANTE,
   )
-  listar(@Query() query: ListarEmprestimosQueryDto) {
-    return this.emprestimosService.listar(query);
+  listar(
+    @Query() query: ListarEmprestimosQueryDto,
+    @CurrentUser() user: { id: number; perfil: string },
+  ) {
+    return this.emprestimosService.listar(query, user);
   }
 
   @Get('historico')
