@@ -5,15 +5,16 @@ Sistema de controle de empréstimo de chaves do IFRN. Projeto integrador I — 4
 ## Tecnologias
 
 - **Backend:** NestJS + TypeORM + PostgreSQL
-- **Frontend:** React + Vite + TypeScript
+- **Frontend:** React + Vite + TypeScript — nas branches `Frontend-*`
 
 ## Estrutura do repositório
 
 ```
 ├── backend/         # API (NestJS) — veja backend/README.md
-├── frontend/        # Aplicação web (React + Vite)
 └── documentation/   # Diagramas e contrato da API
 ```
+
+> O frontend (React + Vite) é desenvolvido nas branches `Frontend-*` e ainda não está na `main`.
 
 ## Rodando o backend (jeito mais rápido)
 

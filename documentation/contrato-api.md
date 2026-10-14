@@ -1,13 +1,11 @@
 # Contrato da API — IFKey
 
-> **Status:** rascunho v0.1 para revisão do time
+> **Status:** implementado — reflete a API atual
 > **Issue:** [#8 — Definir contrato de rotas da API](https://github.com/matheusxz9/IFKey/issues/8)
-> **Última atualização:** 2026-09-10
+> **Última atualização:** 2026-10-13
 >
-> Este documento define o contrato HTTP entre frontend e backend **antes da implementação**.
-> Alterações devem ser discutidas no time e refletidas aqui + na issue antes de codar.
-> Quando o Swagger estiver configurado ([#21](https://github.com/matheusxz9/IFKey/issues/21)),
-> ele passa a ser a fonte viva deste contrato.
+> Este documento define o contrato HTTP entre frontend e backend. A fonte viva é o
+> **Swagger** em `http://localhost:3000/docs`; mudanças no código devem ser refletidas aqui.
 
 ---
 
@@ -15,7 +13,7 @@
 
 | Item | Definição |
 |---|---|
-| Base URL (dev) | `http://localhost:3000` (porta configurável via `PORT`; prefixo `/api` pendente — ver §9) |
+| Base URL (dev) | `http://localhost:3000/api` (porta configurável via `PORT`; prefixo global `/api` aplicado) |
 | Formato | JSON (`application/json; charset=utf-8`) |
 | Datas | ISO 8601 com offset — ex.: `2026-09-10T14:30:00-03:00` (persistir em UTC no banco) |
 | Nomenclatura | `camelCase` nos payloads (mapeamento para o `snake_case` do DER na §8) |
@@ -79,38 +77,34 @@ Erro de validação (`class-validator`), HTTP 400:
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| POST | `/auth/login` | — | Login do administrador (formato pendente — §9.1) |
+| POST | `/auth/suap` | — | Login do administrador via SUAP (troca o `code` por um JWT) |
 | GET | `/auth/me` | ✔ | Administrador autenticado |
-| GET | `/solicitantes` | ✔ | Lista solicitantes (filtros: `nome`, `matricula`, `tipo`, `ativo`) |
-| GET | `/solicitantes/:id` | ✔ | Detalhe do solicitante |
-| POST | `/solicitantes` | ✔ | Cadastra solicitante |
-| PATCH | `/solicitantes/:id` | ✔ | Atualiza solicitante (parcial) |
-| DELETE | `/solicitantes/:id` | ✔ | Inativa solicitante (soft delete) |
-| GET | `/chaves` | ✔ | Lista chaves (filtros: `status`, `ativo`, `busca`) |
-| GET | `/chaves/:id` | ✔ | Detalhe da chave |
-| POST | `/chaves` | ✔ | Cadastra chave |
-| PATCH | `/chaves/:id` | ✔ | Atualiza chave (parcial) |
-| DELETE | `/chaves/:id` | ✔ | Inativa chave (soft delete) |
+| GET | `/solicitantes` | — | Lista solicitantes (filtros: `nome`, `matricula`, `tipo`, `ativo`) |
+| GET | `/solicitantes/:id` | — | Detalhe do solicitante |
+| POST | `/solicitantes` | — | Cadastra solicitante |
+| PATCH | `/solicitantes/:id` | — | Atualiza solicitante (parcial) |
+| DELETE | `/solicitantes/:id` | — | Inativa solicitante (soft delete) |
+| GET | `/chaves` | — | Lista chaves (filtros: `status`, `ativo`, `busca`) |
+| GET | `/chaves/:id` | — | Detalhe da chave |
+| POST | `/chaves` | — | Cadastra chave |
+| PATCH | `/chaves/:id` | — | Atualiza chave (parcial) |
+| DELETE | `/chaves/:id` | — | Inativa chave (soft delete) |
 | POST | `/emprestimos` | ✔ | Registra empréstimo |
 | PATCH | `/emprestimos/:id/devolucao` | ✔ | Registra devolução |
-| GET | `/emprestimos` | ✔ | Lista empréstimos (filtro `status`, `solicitanteId`, `chaveId`) |
-| GET | `/emprestimos/historico` | ✔ | Histórico de devolvidos (filtros `de`, `ate`, `solicitanteId`, `chaveId`) |
-| GET | `/emprestimos/:id` | ✔ | Detalhe do empréstimo |
+| GET | `/emprestimos` | — | Lista empréstimos (filtro `status`, `solicitanteId`, `chaveId`) |
+| GET | `/emprestimos/historico` | — | Histórico de devolvidos (filtros `de`, `ate`, `solicitanteId`, `chaveId`) |
+| GET | `/emprestimos/:id` | — | Detalhe do empréstimo |
+
+> Hoje apenas **registrar empréstimo/devolução** e `/auth/me` exigem token. As demais
+> rotas estão abertas (a proteção das listagens/CRUDs pode ser adicionada depois).
 
 > **Atenção NestJS:** declarar `GET /emprestimos/historico` **antes** de `GET /emprestimos/:id`,
 > senão `historico` é interpretado como `:id`.
 
-### 5.2 Auth — ⚠️ pendente de decisão ([#1](https://github.com/matheusxz9/IFKey/issues/1))
+### 5.2 Auth — implementado via SUAP (OAuth2)
 
-O DER do `ADMINISTRADOR` **não possui senha** (só `login`, `perfil`, `ativo`), e o `.env.example`
-já prevê `SUAP_CLIENT_ID/SECRET/REDIRECT_URI` + `JWT_SECRET` — o que sugere SUAP como provedor.
-Enquanto a decisão não sai, o contrato assume apenas:
-
-- Rotas protegidas exigem `Authorization: Bearer <JWT>`;
-- `401` sem token/expirado; `403` para perfil sem permissão;
-- `GET /auth/me` → `{ "id": 1, "nome": "João Souza", "login": "joao.souza", "perfil": "ADMINISTRADOR" }`.
-
-**Opção A — SUAP (OAuth2), consistente com o DER:**
+O DER do `ADMINISTRADOR` **não possui senha**; o login é feito pelo SUAP (OAuth2) e o
+backend emite um JWT. O `code` recebido no callback é trocado pelo token.
 
 ```
 POST /auth/suap
@@ -120,12 +114,10 @@ POST /auth/suap
 { "accessToken": "<jwt>", "administrador": { "id": 1, "nome": "...", "login": "...", "perfil": "ADMINISTRADOR" } }
 ```
 
-**Opção B — login/senha local (exigiria `senha_hash` no DER):**
-
-```
-POST /auth/login
-{ "login": "joao.souza", "senha": "********" }
-```
+- O `login` do administrador é derivado da conta SUAP (parte antes do `@` do e-mail acadêmico).
+- Se o login não estiver cadastrado (ou inativo) na tabela `administrador` → `403 SEM_PERMISSAO`.
+- Rotas protegidas exigem `Authorization: Bearer <JWT>`; `401 NAO_AUTENTICADO` sem token/expirado.
+- `GET /auth/me` → `{ "id": 1, "nome": "...", "login": "...", "perfil": "ADMINISTRADOR" }`.
 
 ### 5.3 Solicitantes
 
