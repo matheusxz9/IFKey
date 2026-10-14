@@ -24,7 +24,10 @@ export class SolicitantesService {
 
   async listar(query: ListarSolicitantesQueryDto) {
     const qb = this.repo.createQueryBuilder('s');
-    qb.where('s.ativo = :ativo', { ativo: query.ativo ?? true });
+    const ativo = query.ativo;
+    if (ativo !== undefined) {
+      qb.andWhere('s.ativo = :ativo', { ativo });
+    }
     const nome = query.nome;
     if (nome) {
       qb.andWhere('LOWER(s.nome) LIKE LOWER(:nome)', { nome: `%${nome}%` });
@@ -37,6 +40,7 @@ export class SolicitantesService {
     if (tipo) {
       qb.andWhere('s.tipo = :tipo', { tipo });
     }
+    qb.orderBy('s.nome', 'ASC').addOrderBy('s.id', 'ASC');
     qb.skip((query.page - 1) * query.limit).take(query.limit);
     const [data, total] = await qb.getManyAndCount();
     return {
@@ -94,6 +98,16 @@ export class SolicitantesService {
         .getOne();
       if (duplicada) {
         throw new MatriculaDuplicadaException();
+      }
+    }
+    if (dto.ativo === false) {
+      const temEmprestimoAtivo = await this.emprestimoRepo.exists({
+        where: { solicitante: { id }, status: StatusEmprestimo.EMPRESTADA },
+      });
+      if (temEmprestimoAtivo) {
+        throw new RecursoComEmprestimoAtivoException(
+          'Solicitante não pode ser inativado: há empréstimo ativo.',
+        );
       }
     }
     Object.assign(solicitante, dto);

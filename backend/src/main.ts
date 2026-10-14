@@ -3,13 +3,17 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
 
   app.setGlobalPrefix('api');
+  const corsOrigin =
+    configService.get<string>('CORS_ORIGIN') || 'http://localhost:5173';
   app.enableCors({
-    origin: ['http://localhost:5173'],
+    origin: corsOrigin.split(','),
     credentials: true,
   });
   const config = new DocumentBuilder()
@@ -29,6 +33,6 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(configService.get<number>('PORT') ?? 3000);
 }
 void bootstrap();

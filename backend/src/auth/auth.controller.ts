@@ -15,9 +15,21 @@ export class AuthController {
     return this.authService.loginSuap(dto.code);
   }
 
+  @Post('refresh')
+  async refresh(@Body() dto: { refreshToken: string }) {
+    return this.authService.refreshTokens(dto.refreshToken);
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  async logout(@Body() dto: { refreshToken: string }) {
+    await this.authService.revokeRefreshToken(dto.refreshToken);
+    return { message: 'Logout realizado com sucesso.' };
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  me(@CurrentUser() user: { id: number }) {
-    return this.authService.perfil(user.id);
+  me(@CurrentUser() user: { id: number; perfil: string }) {
+    return this.authService.perfil(user.id, user.perfil);
   }
 }
