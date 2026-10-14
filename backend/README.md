@@ -6,7 +6,7 @@ API do sistema de controle de chaves. Todas as rotas têm o prefixo `/api`.
 
 ## 1. Pré-requisitos
 
-- **Node.js** 24+ (testado na v24.19)
+- **Node.js** 22+ (testado na v24.19)
 - **Docker** (para o banco Postgres)
 - **npm**
 
@@ -17,6 +17,21 @@ API do sistema de controle de chaves. Todas as rotas têm o prefixo `/api`.
 ```bash
 cd backend
 ```
+
+### 2.0 Modo rápido (recomendado)
+
+```bash
+npm install
+npm run setup
+```
+
+O `npm run setup` faz sozinho: cria o `.env` (a partir do `.env.example`), sobe o Postgres
+no Docker, **espera o banco ficar pronto**, roda as migrations e popula os dados de teste.
+
+Depois é só cadastrar seu login (item 2.6), subir a API (item 2.7) e, se quiser, a página de
+teste do login (item 2.8).
+
+> Os itens a seguir detalham cada passo — caso você prefira rodar manualmente ou algo dê errado.
 
 ### 2.1 Instalar as dependências
 
@@ -62,6 +77,8 @@ O Postgres fica na porta **5434** (a 5433 costuma estar ocupada por outros proje
 npm run migration:run
 ```
 
+Roda **todas** as migrations pendentes na ordem correta automaticamente — não precisa escolher qual rodar. É idempotente: pode rodar de novo sem problema (aplica só o que ainda falta).
+
 ### 2.5 Inserir dados de teste (seed)
 
 ```bash
@@ -104,13 +121,11 @@ Serve a página de teste em **http://localhost:5173/login/suap/callback** (lê a
 
 1. `git clone` do repositório + `cd backend`
 2. `npm install`
-3. Copiar o `.env` com as credenciais (pedir ao time — fica fora do git)
-4. `docker compose up -d db`
-5. `npm run migration:run`
-6. `npm run seed`
-7. `npm run admin:add -- <login-do-suap> "<Nome>"` (cadastrar o próprio login)
-8. `npm run start:dev` + `npm run callback:test` (em terminais separados)
-9. Abrir `http://localhost:5173/login/suap/callback` → "Entrar com SUAP"
+3. `npm run setup` (cria o `.env`, sobe o banco, roda migrations e seed)
+4. Editar o `.env` e colar as **credenciais do SUAP** (pedir ao time)
+5. `npm run admin:add -- <login-do-suap> "<Nome>"` (cadastrar o próprio login)
+6. `npm run start:dev` + `npm run callback:test` (em terminais separados)
+7. Abrir `http://localhost:5173/login/suap/callback` → "Entrar com SUAP"
 
 ---
 
@@ -321,6 +336,7 @@ npm run test:e2e      # testes de integração (11) — precisa do banco rodando
 | Login retorna `403 SEM_PERMISSAO` | Seu login SUAP não está na tabela `administrador`. Rode `npm run admin:add -- <login> "<Nome>"` |
 | Porta 3000 ocupada | Mude `PORT` no `.env` |
 | `migration:run` dá erro de conexão | Confira se o banco está no ar (`docker compose up -d db`) e o `.env` com `DB_HOST/DB_PORT` corretos |
+| `migration:run` dá `relation "emprestimo" does not exist` | Você está numa branch/repositório antigo com migrations fora de ordem. Atualize o código (`git pull`) e recrie o banco do zero: `docker compose down -v && docker compose up -d db && npm run migration:run` |
 | CORS bloqueando o frontend | O backend já libera `http://localhost:5173`. Se usar outra porta, adicione no `main.ts` |
 | Banco "sujo" | `npm run seed` reinicia os dados (TRUNCATE + insert) |
 
