@@ -24,17 +24,19 @@ function carregarEnv() {
   return valores;
 }
 
-async function esperarPostgres(env) {
+async function esperarPostgres(env, tentativas = 60) {
   const { Client } = pg;
-  const client = new Client({
+  const config = {
     host: env.DB_HOST || 'localhost',
     port: parseInt(env.DB_PORT || '5434', 10),
     user: env.DB_USERNAME || 'postgres',
     password: env.DB_PASSWORD || 'postgres',
     database: env.DB_NAME || 'ifkey_db',
-  });
+    connectionTimeoutMillis: 3000,
+  };
 
-  for (let tentativa = 1; tentativa <= 30; tentativa++) {
+  for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
+    const client = new Client(config);
     try {
       await client.connect();
       await client.query('SELECT 1');
@@ -42,6 +44,11 @@ async function esperarPostgres(env) {
       return true;
     } catch {
       process.stdout.write('.');
+      try {
+        await client.end();
+      } catch {
+        // ignora
+      }
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
