@@ -4,8 +4,10 @@ import {
   criarAdministrador,
   atualizarAdministrador,
   inativarAdministrador,
+  converterAdministradorEmSolicitante,
 } from "../services/administradores";
 import type { Administrador, PerfilAdministrador } from "../types/administrador";
+import type { TipoSolicitante } from "../types/solicitante";
 import { useToast } from "../contexts/ToastContext";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
@@ -51,6 +53,13 @@ function GestaoAdministradoresPage() {
   const [administradorParaInativar, setAdministradorParaInativar] = useState<Administrador | null>(null);
   const [inativando, setInativando] = useState(false);
   const [reativando, setReativando] = useState(false);
+
+  const [adminParaConverter, setAdminParaConverter] = useState<Administrador | null>(null);
+  const [tipoConversao, setTipoConversao] = useState<TipoSolicitante>("ALUNO");
+  const [matriculaConversao, setMatriculaConversao] = useState("");
+  const [contatoConversao, setContatoConversao] = useState("");
+  const [convertendo, setConvertendo] = useState(false);
+  const [erroConversao, setErroConversao] = useState("");
 
   const requisicaoRef = useRef(0);
 
@@ -146,6 +155,10 @@ function GestaoAdministradoresPage() {
       const err = error as Error & { code?: string };
       if (err.code === "LOGIN_DUPLICADO") {
         setErroModal("Já existe um administrador com esse login.");
+      } else if (err.code === "IDENTIFICADOR_DUPLICADO") {
+        setErroModal("Esse login já pertence a um solicitante cadastrado.");
+      } else if (err.code === "ULTIMO_ADMINISTRADOR") {
+        setErroModal("Não é possível deixar o sistema sem administrador ativo. Ative ou cadastre outro administrador antes.");
       } else if (err.code === "VALIDACAO") {
         setErroModal("Dados inválidos. Verifique os campos informados.");
       } else {
@@ -164,10 +177,58 @@ function GestaoAdministradoresPage() {
       toast.success("Administrador inativado com sucesso!");
       setAdministradorParaInativar(null);
       await carregarAdministradores(pagina);
-    } catch {
-      toast.error("Erro ao inativar o administrador. Tente novamente.");
+    } catch (error) {
+      const err = error as Error & { code?: string };
+      if (err.code === "ULTIMO_ADMINISTRADOR") {
+        toast.error("Não é possível inativar o último administrador ativo. Ative ou cadastre outro administrador antes.");
+      } else {
+        toast.error("Erro ao inativar o administrador. Tente novamente.");
+      }
     } finally {
       setInativando(false);
+    }
+  }
+
+  function abrirModalConversao(administrador: Administrador) {
+    setAdminParaConverter(administrador);
+    setTipoConversao("ALUNO");
+    setMatriculaConversao(administrador.login);
+    setContatoConversao("");
+    setErroConversao("");
+  }
+
+  function fecharModalConversao() {
+    if (convertendo) return;
+    setAdminParaConverter(null);
+    setErroConversao("");
+  }
+
+  async function confirmarConversao() {
+    if (!adminParaConverter) return;
+    try {
+      setConvertendo(true);
+      setErroConversao("");
+      const solicitante = await converterAdministradorEmSolicitante(adminParaConverter.id, {
+        tipo: tipoConversao,
+        matricula: matriculaConversao.trim() || undefined,
+        contato: contatoConversao.trim() || undefined,
+      });
+      toast.success(`${solicitante.nome} agora é solicitante (matrícula ${solicitante.matricula}).`);
+      fecharModalConversao();
+      await carregarAdministradores(pagina);
+    } catch (error) {
+      const err = error as Error & { code?: string };
+      if (err.code === "ULTIMO_ADMINISTRADOR") {
+        setErroConversao("Não é possível converter o último administrador ativo. Ative ou cadastre outro administrador antes.");
+      } else if (err.code === "MATRICULA_DUPLICADA") {
+        setErroConversao("Já existe um solicitante com essa matrícula.");
+      } else if (err.code === "VALIDACAO") {
+        setErroConversao("Dados inválidos. Verifique os campos informados.");
+      } else {
+        setErroConversao(err.message || "Não foi possível converter o administrador.");
+      }
+    } finally {
+      setConvertendo(false);
     }
   }
 
@@ -221,6 +282,13 @@ function GestaoAdministradoresPage() {
             className="rounded-md border border-gray-700 px-3 py-1 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer">
             Editar
           </button>
+          {a.ativo && (
+            <button type="button" aria-label={`Tornar ${a.nome} solicitante`}
+              onClick={() => abrirModalConversao(a)}
+              className="rounded-md border border-amber-700 px-3 py-1 text-sm font-medium text-amber-400 hover:bg-amber-950/40 cursor-pointer">
+              Tornar solicitante
+            </button>
+          )}
           {a.ativo && (
             <button type="button" aria-label={`Inativar administrador ${a.nome}`}
               onClick={() => setAdministradorParaInativar(a)}
@@ -348,6 +416,51 @@ function GestaoAdministradoresPage() {
         onConfirmar={executarInativacao} titulo="Inativar administrador"
         mensagem={`Tem certeza que deseja inativar ${administradorParaInativar?.nome}?`}
         textoConfirmar="Confirmar inativação" carregando={inativando} />
+
+      <Modal aberto={!!adminParaConverter} onClose={fecharModalConversao}
+        titulo="Tornar administrador em solicitante">
+        <p className="mb-4 text-sm text-gray-400">
+          O administrador <strong className="text-gray-200">{adminParaConverter?.nome}</strong> será
+          inativado e passará a acessar o sistema como solicitante, com a matrícula informada.
+        </p>
+        <div className="mb-4">
+          <label htmlFor="tipoConversao" className="mb-2 block text-sm font-medium">Tipo</label>
+          <select id="tipoConversao" value={tipoConversao}
+            onChange={(e) => setTipoConversao(e.target.value as TipoSolicitante)}
+            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
+            <option value="ALUNO">Aluno</option>
+            <option value="PROFESSOR">Professor</option>
+            <option value="SERVIDOR">Servidor</option>
+          </select>
+        </div>
+        <div className="mb-4">
+          <label htmlFor="matriculaConversao" className="mb-2 block text-sm font-medium">Matrícula (SUAP)</label>
+          <input id="matriculaConversao" type="text" value={matriculaConversao}
+            onChange={(e) => setMatriculaConversao(e.target.value)}
+            placeholder="Matrícula do SUAP"
+            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="contatoConversao" className="mb-2 block text-sm font-medium">Contato (opcional)</label>
+          <input id="contatoConversao" type="text" value={contatoConversao}
+            onChange={(e) => setContatoConversao(e.target.value)}
+            placeholder="E-mail ou telefone"
+            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
+        </div>
+        {erroConversao && (
+          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-400" role="alert">{erroConversao}</div>
+        )}
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={fecharModalConversao} disabled={convertendo}
+            className="rounded-md border border-gray-700 px-5 py-3 font-semibold text-gray-300 hover:bg-gray-800 disabled:opacity-40 cursor-pointer">
+            Cancelar
+          </button>
+          <button type="button" onClick={confirmarConversao} disabled={convertendo}
+            className="rounded-md bg-amber-700 px-5 py-3 font-semibold text-white hover:bg-amber-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40">
+            {convertendo ? "Convertendo..." : "Converter"}
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }
