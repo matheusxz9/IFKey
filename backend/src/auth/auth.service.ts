@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
-import { SuapService } from './suap.service';
+import { SuapService, UsuarioSuap } from './suap.service';
 import { Administrador } from '../administradores/administrador.entity';
 import { Solicitante } from '../solicitantes/solicitante.entity';
 import { RefreshToken } from './refresh-token.entity';
@@ -33,23 +33,37 @@ export class AuthService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
+  private identificadores(usuario: UsuarioSuap): string[] {
+    const candidatos = new Set<string>();
+    const adicionar = (valor?: string) => {
+      const limpo = valor?.trim();
+      if (limpo) candidatos.add(limpo);
+    };
+    // A SUAP expõe a matrícula tanto no nível raiz quanto em `vinculo`,
+    // e o usuário (IFRN-id) em `identificacao`. Usamos todos como possíveis
+    // identificadores, pois o formato varia entre aluno e servidor.
+    adicionar(usuario.vinculo?.matricula);
+    adicionar(usuario.matricula);
+    adicionar(usuario.identificacao);
+    adicionar(usuario.vinculo?.login);
+    adicionar(usuario.email_academico?.split('@')[0]);
+    adicionar(usuario.email_google_classroom?.split('@')[0]);
+    adicionar(usuario.email_secundario?.split('@')[0]);
+    return [...candidatos];
+  }
+
   async loginSuap(code: string) {
     const accessToken = await this.suapService.trocarCodePorToken(code);
     const usuario = await this.suapService.buscarUsuario(accessToken);
-    const login =
-      usuario.vinculo?.login ??
-      usuario.email_academico?.split('@')[0] ??
-      usuario.email_google_classroom?.split('@')[0] ??
-      usuario.identificacao;
-    const matricula = usuario.vinculo?.matricula;
+    const candidatos = this.identificadores(usuario);
 
-    if (login) {
+    if (candidatos.length) {
       const admin = await this.adminRepo.findOne({
-        where: { login, ativo: true },
+        where: { login: In(candidatos), ativo: true },
       });
       if (admin) {
         this.logger.log(
-          `Login SUAP OK (admin): ${login} (admin id ${admin.id})`,
+          `Login SUAP OK (admin): ${admin.login} (admin id ${admin.id})`,
         );
         return this.generateTokens(
           admin.id,
@@ -58,15 +72,13 @@ export class AuthService {
           'admin',
         );
       }
-    }
 
-    if (matricula) {
       const solicitante = await this.solicitanteRepo.findOne({
-        where: { matricula, ativo: true },
+        where: { matricula: In(candidatos), ativo: true },
       });
       if (solicitante) {
         this.logger.log(
-          `Login SUAP OK (solicitante): ${matricula} (solicitante id ${solicitante.id})`,
+          `Login SUAP OK (solicitante): ${solicitante.matricula} (solicitante id ${solicitante.id})`,
         );
         return this.generateTokens(
           solicitante.id,
@@ -79,7 +91,7 @@ export class AuthService {
     }
 
     this.logger.warn(
-      `Login SUAP sem cadastro: login=${login}, matricula=${matricula}`,
+      `Login SUAP sem cadastro: identificadores=[${candidatos.join(', ')}]`,
     );
     throw new SemPermissaoException(
       'Usuário não está cadastrado como administrador ou solicitante ativo.',

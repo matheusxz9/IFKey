@@ -150,6 +150,8 @@ function GestaoSolicitantesPage() {
       const err = error as Error & { code?: string };
       if (err.code === "MATRICULA_DUPLICADA") {
         setErroModal("Já existe um solicitante com essa matrícula.");
+      } else if (err.code === "IDENTIFICADOR_DUPLICADO") {
+        setErroModal("Essa matrícula já pertence a um administrador cadastrado.");
       } else if (err.code === "VALIDACAO") {
         setErroModal("Dados inválidos. Verifique os campos informados.");
       } else {

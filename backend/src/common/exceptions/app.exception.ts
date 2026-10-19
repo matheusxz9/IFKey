@@ -22,6 +22,12 @@ export class MatriculaDuplicadaException extends AppException {
   }
 }
 
+export class LoginDuplicadoException extends AppException {
+  constructor(message = 'Login já cadastrado.') {
+    super(message, HttpStatus.CONFLICT, CodigoErro.LOGIN_DUPLICADO);
+  }
+}
+
 export class CodigoChaveDuplicadoException extends AppException {
   constructor(message = 'Código da chave já cadastrada.') {
     super(message, HttpStatus.CONFLICT, CodigoErro.CODIGO_CHAVE_DUPLICADO);
@@ -47,6 +53,20 @@ export class RecursoComEmprestimoAtivoException extends AppException {
       HttpStatus.CONFLICT,
       CodigoErro.RECURSO_COM_EMPRESTIMO_ATIVO,
     );
+  }
+}
+
+export class IdentificadorDuplicadoException extends AppException {
+  constructor(message = 'Este identificador já está em uso.') {
+    super(message, HttpStatus.CONFLICT, CodigoErro.IDENTIFICADOR_DUPLICADO);
+  }
+}
+
+export class UltimoAdministradorException extends AppException {
+  constructor(
+    message = 'Operação bloqueada: é necessário manter ao menos um administrador ativo.',
+  ) {
+    super(message, HttpStatus.CONFLICT, CodigoErro.ULTIMO_ADMINISTRADOR);
   }
 }
 

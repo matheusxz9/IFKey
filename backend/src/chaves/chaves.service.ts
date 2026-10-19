@@ -25,18 +25,26 @@ export class ChavesService {
 
   async listar(query: ListarChavesQueryDto) {
     const qb = this.repo.createQueryBuilder('c');
-    qb.where('c.ativo = :ativo', { ativo: query.ativo ?? true });
+    const ativo = query.ativo;
+    if (ativo !== undefined) {
+      qb.andWhere('c.ativo = :ativo', { ativo });
+    }
     const status = query.status;
     if (status) {
       qb.andWhere('c.status = :status', { status });
     }
     const busca = query.busca;
     if (busca) {
-      qb.andWhere(
-        '(LOWER(c.codigo) LIKE LOWER(:termo) OR LOWER(c.descricao) LIKE LOWER(:termo) OR LOWER(c.localizacao) LIKE LOWER(:termo))',
-        { termo: `%${busca}%` },
-      );
+      const termos = busca.trim().split(/\s+/).filter(Boolean);
+      termos.forEach((termo, i) => {
+        const param = `termo${i}`;
+        qb.andWhere(
+          `(LOWER(c.codigo) LIKE LOWER(:${param}) OR LOWER(c.descricao) LIKE LOWER(:${param}) OR LOWER(c.localizacao) LIKE LOWER(:${param}))`,
+          { [param]: `%${termo}%` },
+        );
+      });
     }
+    qb.orderBy('c.codigo', 'ASC').addOrderBy('c.id', 'ASC');
     qb.skip((query.page - 1) * query.limit).take(query.limit);
     const [data, total] = await qb.getManyAndCount();
     return {
@@ -93,6 +101,16 @@ export class ChavesService {
         .getOne();
       if (duplicada) {
         throw new CodigoChaveDuplicadoException();
+      }
+    }
+    if (dto.ativo === false) {
+      const temEmprestimoAtivo = await this.emprestimoRepo.exists({
+        where: { chave: { id }, status: StatusEmprestimo.EMPRESTADA },
+      });
+      if (temEmprestimoAtivo) {
+        throw new RecursoComEmprestimoAtivoException(
+          'Chave não pode ser inativada: há empréstimo ativo.',
+        );
       }
     }
     Object.assign(chave, dto);

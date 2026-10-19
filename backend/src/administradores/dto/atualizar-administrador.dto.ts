@@ -2,11 +2,14 @@ import {
   IsString,
   IsOptional,
   MaxLength,
-  IsEnum,
+  IsIn,
   IsBoolean,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { PerfilAdministrador } from '../../common/enums/perfil-administrador.enum';
+import {
+  PerfilAdministrador,
+  PERFIS_ADMINISTRADOR,
+} from '../../common/enums/perfil-administrador.enum';
 
 export class AtualizarAdministradorDto {
   @ApiPropertyOptional({ example: 'João Silva Santos' })
@@ -16,11 +19,13 @@ export class AtualizarAdministradorDto {
   nome?: string;
 
   @ApiPropertyOptional({
-    enum: PerfilAdministrador,
+    enum: [PerfilAdministrador.ADMINISTRADOR, PerfilAdministrador.GESTOR],
     example: PerfilAdministrador.GESTOR,
   })
   @IsOptional()
-  @IsEnum(PerfilAdministrador)
+  @IsIn(PERFIS_ADMINISTRADOR, {
+    message: 'perfil deve ser ADMINISTRADOR ou GESTOR',
+  })
   perfil?: PerfilAdministrador;
 
   @ApiPropertyOptional({ example: true })

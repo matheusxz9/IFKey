@@ -83,7 +83,6 @@ export class EmprestimosService {
       const emprestimo = await emprestimoRepo.findOne({
         where: { id },
         relations: { chave: true },
-        lock: { mode: 'pessimistic_write' },
       });
       if (!emprestimo) {
         throw new NaoEncontradoException('Empréstimo não encontrado.');
@@ -91,6 +90,14 @@ export class EmprestimosService {
       if (emprestimo.status === StatusEmprestimo.DEVOLVIDA) {
         throw new EmprestimoJaDevolvidoException();
       }
+
+      // O `FOR UPDATE` não pode ser aplicado junto do join de `relations`
+      // (erro do Postgres), então o lock é feito apenas na linha da chave
+      // para serializar devoluções concorrentes.
+      await chaveRepo.findOne({
+        where: { id: emprestimo.chave.id },
+        lock: { mode: 'pessimistic_write' },
+      });
 
       await emprestimoRepo.update(id, {
         status: StatusEmprestimo.DEVOLVIDA,
@@ -124,13 +131,18 @@ export class EmprestimosService {
     return emprestimo;
   }
 
-  async listar(query: ListarEmprestimosQueryDto) {
+  async listar(
+    query: ListarEmprestimosQueryDto,
+    user?: { id: number; perfil: string },
+  ) {
+    const solicitanteId =
+      user?.perfil === PerfilAdministrador.SOLICITANTE
+        ? user.id
+        : query.solicitanteId;
     const [data, total] = await this.repo.findAndCount({
       where: {
         ...(query.status ? { status: query.status } : {}),
-        ...(query.solicitanteId
-          ? { solicitante: { id: query.solicitanteId } }
-          : {}),
+        ...(solicitanteId ? { solicitante: { id: solicitanteId } } : {}),
         ...(query.chaveId ? { chave: { id: query.chaveId } } : {}),
       },
       relations: {
@@ -182,11 +194,15 @@ export class EmprestimosService {
 
     const de = query.de;
     if (de) {
-      qb.andWhere('e.dataHoraEmprestimo >= :de', { de: new Date(de) });
+      qb.andWhere('e.dataHoraEmprestimo >= :de', {
+        de: this.inicioDoDia(de),
+      });
     }
     const ate = query.ate;
     if (ate) {
-      qb.andWhere('e.dataHoraEmprestimo <= :ate', { ate: new Date(ate) });
+      qb.andWhere('e.dataHoraEmprestimo <= :ate', {
+        ate: this.fimDoDia(ate),
+      });
     }
     const chaveId = query.chaveId;
     if (chaveId) {
@@ -222,6 +238,18 @@ export class EmprestimosService {
       throw new NaoEncontradoException('Empréstimo não encontrado.');
     }
     return emprestimo;
+  }
+
+  private inicioDoDia(valor: string): Date {
+    return valor.length === 10
+      ? new Date(`${valor}T00:00:00`)
+      : new Date(valor);
+  }
+
+  private fimDoDia(valor: string): Date {
+    return valor.length === 10
+      ? new Date(`${valor}T23:59:59.999`)
+      : new Date(valor);
   }
 
   private toResponse(e: Emprestimo) {

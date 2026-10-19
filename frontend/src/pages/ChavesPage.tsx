@@ -5,11 +5,12 @@ import {
   listarEmprestimos,
   devolverEmprestimo,
 } from "../services/emprestimos";
-import { buscarSolicitantePorMatricula } from "../services/solicitantes";
+import { buscarSolicitante as buscarSolicitantePorId, buscarSolicitantePorMatricula } from "../services/solicitantes";
 import type { Chave, StatusChave } from "../types/chave";
 import type { Emprestimo } from "../types/emprestimo";
 import type { Solicitante } from "../types/solicitante";
 import { useToast } from "../contexts/ToastContext";
+import { useAuth } from "../contexts/AuthContext";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -20,6 +21,7 @@ type FiltrosChaves = { busca: string; status: StatusChave | "" };
 
 function ChavesPage() {
   const toast = useToast();
+  const { user, isSolicitante } = useAuth();
   const [chaves, setChaves] = useState<Chave[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -61,6 +63,7 @@ function ChavesPage() {
         {
           busca: filtros.busca || undefined,
           status: filtros.status || undefined,
+          ativo: true,
           page: paginaAtual,
           limit: 10,
         },
@@ -119,10 +122,33 @@ function ChavesPage() {
 
   function abrirModalEmprestimo(chave: Chave) {
     setChaveSelecionada(chave);
-    setMatricula("");
     setSolicitante(null);
     setObservacoes("");
     setErroModal("");
+    if (isSolicitante && user) {
+      setMatricula(user.perfil === "SOLICITANTE" ? user.matricula : "");
+      void carregarSolicitanteProprio();
+    } else {
+      setMatricula("");
+    }
+  }
+
+  async function carregarSolicitanteProprio() {
+    if (!user) return;
+    try {
+      setBuscandoSolicitante(true);
+      setErroModal("");
+      const proprio = await buscarSolicitantePorId(user.id);
+      setSolicitante(proprio);
+    } catch (error) {
+      setErroModal(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar seus dados de solicitante.",
+      );
+    } finally {
+      setBuscandoSolicitante(false);
+    }
   }
 
   function fecharModalEmprestimo() {
@@ -327,19 +353,28 @@ function ChavesPage() {
           <p className="mt-1 font-semibold">{chaveSelecionada?.codigo}</p>
           <p className="text-sm text-gray-400">{chaveSelecionada?.descricao}</p>
         </div>
-        <div className="mb-6">
-          <label htmlFor="matricula" className="mb-2 block text-sm font-medium">Matrícula do solicitante</label>
-          <div className="flex gap-3">
-            <input id="matricula" type="text" value={matricula} onChange={(e) => setMatricula(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") buscarSolicitante(); }}
-              placeholder="Digite a matrícula"
-              className="min-w-0 flex-1 rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-            <button type="button" onClick={buscarSolicitante} disabled={buscandoSolicitante}
-              className="rounded-md bg-green-700 px-4 py-3 font-semibold hover:bg-green-800 disabled:opacity-50 cursor-pointer">
-              {buscandoSolicitante ? "Buscando..." : "Buscar"}
-            </button>
+        {isSolicitante ? (
+          <div className="mb-6 rounded-lg border border-gray-700 bg-gray-950 p-4">
+            <p className="text-sm text-gray-400">Solicitante</p>
+            <p className="mt-1 text-sm text-gray-300">
+              O empréstimo será registrado para você mesmo.
+            </p>
           </div>
-        </div>
+        ) : (
+          <div className="mb-6">
+            <label htmlFor="matricula" className="mb-2 block text-sm font-medium">Matrícula do solicitante</label>
+            <div className="flex gap-3">
+              <input id="matricula" type="text" value={matricula} onChange={(e) => setMatricula(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") buscarSolicitante(); }}
+                placeholder="Digite a matrícula"
+                className="min-w-0 flex-1 rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
+              <button type="button" onClick={buscarSolicitante} disabled={buscandoSolicitante}
+                className="rounded-md bg-green-700 px-4 py-3 font-semibold hover:bg-green-800 disabled:opacity-50 cursor-pointer">
+                {buscandoSolicitante ? "Buscando..." : "Buscar"}
+              </button>
+            </div>
+          </div>
+        )}
         {solicitante && (
           <div className="mb-6 rounded-lg border border-green-800 bg-green-950/30 p-4">
             <p className="text-sm text-gray-400">Solicitante</p>

@@ -103,7 +103,7 @@ function HistoricoPage() {
   function pesquisar() {
     setPagina(1);
     const solicitanteId = isSolicitante && user?.tipo === "solicitante" ? user.id : undefined;
-    carregarHistorico(1, { solicitanteId });
+    carregarHistorico(1, { de: dataInicio, ate: dataFim, solicitanteId });
   }
 
   return (

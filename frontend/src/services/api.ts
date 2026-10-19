@@ -21,10 +21,6 @@ function normalizarMensagem(message: string | string[] | undefined): string {
   return message || "Ocorreu um erro na requisição.";
 }
 
-export interface ApiFetchOptions extends RequestInit {
-  signal?: AbortSignal;
-}
-
 let isRefreshing = false;
 let refreshPromise: Promise<string> | null = null;
 

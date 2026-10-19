@@ -6,6 +6,7 @@ function LoginPage() {
       client_id: import.meta.env.VITE_CLIENT_ID,
       response_type: "code",
       redirect_uri: import.meta.env.VITE_REDIRECT_URI,
+      scope: "identificacao email",
     });
 
     window.location.href = `https://suap.ifrn.edu.br/o/authorize/?${params.toString()}`;

@@ -1,3 +1,5 @@
+import type { TipoSolicitante } from "./solicitante";
+
 export type PerfilAdministrador = "ADMINISTRADOR" | "GESTOR" | "SOLICITANTE";
 
 export interface Administrador {
@@ -18,6 +20,12 @@ export interface AtualizarAdministradorDto {
   nome?: string;
   perfil?: PerfilAdministrador;
   ativo?: boolean;
+}
+
+export interface ConverterSolicitanteDto {
+  tipo: TipoSolicitante;
+  matricula?: string;
+  contato?: string;
 }
 
 export interface ListarAdministradoresQueryDto {

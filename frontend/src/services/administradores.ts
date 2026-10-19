@@ -3,9 +3,11 @@ import type {
   Administrador,
   CriarAdministradorDto,
   AtualizarAdministradorDto,
+  ConverterSolicitanteDto,
   ListarAdministradoresQueryDto,
   PaginatedResponse,
 } from "../types/administrador";
+import type { Solicitante } from "../types/solicitante";
 
 export const administradoresService = {
   async listar(
@@ -67,6 +69,22 @@ export const administradoresService = {
       ...options,
     });
   },
+
+  async converterEmSolicitante(
+    id: number,
+    dto: ConverterSolicitanteDto,
+    options?: ApiFetchOptions,
+  ): Promise<Solicitante> {
+    const response = await apiFetch<Solicitante>(
+      `/administradores/${id}/converter-solicitante`,
+      {
+        method: "POST",
+        body: JSON.stringify(dto),
+        ...options,
+      },
+    );
+    return response;
+  },
 };
 
 export const {
@@ -75,4 +93,5 @@ export const {
   criar: criarAdministrador,
   atualizar: atualizarAdministrador,
   inativar: inativarAdministrador,
+  converterEmSolicitante: converterAdministradorEmSolicitante,
 } = administradoresService;

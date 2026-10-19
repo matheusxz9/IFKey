@@ -1,16 +1,27 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+export interface VinculoSuap {
+  login?: string;
+  matricula?: string;
+  nome?: string;
+  tipo?: string;
+}
+
 export interface UsuarioSuap {
+  id?: number;
+  matricula?: string;
   identificacao?: string;
   nome_usual?: string;
   nome?: string;
+  email?: string;
   email_academico?: string;
   email_google_classroom?: string;
   email_secundario?: string;
   campus?: string;
   tipo_usuario?: string;
-  vinculo?: { login: string; matricula: string };
+  tipo_vinculo?: string;
+  vinculo?: VinculoSuap;
 }
 
 @Injectable()
@@ -78,8 +89,9 @@ export class SuapService {
       );
     }
     const usuario = (await response.json()) as UsuarioSuap;
+    const matricula = usuario.vinculo?.matricula ?? usuario.matricula ?? '?';
     this.logger.log(
-      `SUAP /api/rh/eu/ OK: login="${usuario.email_academico?.split('@')[0] ?? '?'}"`,
+      `SUAP /api/rh/eu/ OK: identificacao="${usuario.identificacao ?? '?'}" matricula="${matricula}" campos=[${Object.keys(usuario).join(',')}]`,
     );
     return usuario;
   }
