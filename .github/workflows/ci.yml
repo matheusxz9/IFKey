@@ -109,7 +109,7 @@ jobs:
         run: npm run lint
       - name: Verificação de tipos
         working-directory: frontend
-        run: npx tsc --noEmit
+        run: npx tsc -b
       - name: Testes E2E (Playwright)
         working-directory: frontend
         run: npm run test:e2e

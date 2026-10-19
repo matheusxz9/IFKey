@@ -1,10 +1,24 @@
-import { IsOptional, IsString, IsEnum, IsBoolean } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsEnum,
+  IsBoolean,
+  IsInt,
+  Max,
+  Min,
+} from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { PerfilAdministrador } from '../../common/enums/perfil-administrador.enum';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 export class ListarAdministradoresQueryDto extends PaginationQueryDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit: number = 10;
+
   @ApiPropertyOptional({ example: 'João' })
   @IsOptional()
   @IsString()

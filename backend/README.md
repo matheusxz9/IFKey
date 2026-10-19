@@ -6,7 +6,7 @@ API do sistema de controle de chaves. Todas as rotas têm o prefixo `/api`.
 
 ## 1. Pré-requisitos
 
-- **Node.js** 22+ (testado na v24.19)
+- **Node.js** 20.19+ (o CI usa Node 20; também testado na v24)
 - **Docker** (para o banco Postgres)
 - **npm**
 
@@ -321,8 +321,8 @@ curl "$API/emprestimos/historico"
 ## 4. Testes automatizados
 
 ```bash
-npm test              # testes unitários (9)
-npm run test:e2e      # testes de integração (11) — precisa do banco rodando
+npm test              # testes unitários
+npm run test:e2e      # testes de integração — precisa do banco rodando
 ```
 
 > ⚠️ O `test:e2e` **limpa as tabelas** (TRUNCATE) no início. Depois dele, rode de novo `npm run seed` e `npm run admin:add` para restaurar os dados de desenvolvimento.
@@ -350,7 +350,7 @@ src/
   chaves/        # CRUD de chaves
   solicitantes/  # CRUD de solicitantes
   emprestimos/   # Empréstimos, devolução e histórico
-  administradores/  # Entidade do administrador
+  administradores/  # CRUD de administradores e conversão em solicitante
   common/
     enums/       # Enums do domínio e códigos de erro
     exceptions/  # Exceções de negócio

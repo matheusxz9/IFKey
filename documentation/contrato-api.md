@@ -2,7 +2,7 @@
 
 > **Status:** implementado — reflete a API atual
 > **Issue:** [#8 — Definir contrato de rotas da API](https://github.com/matheusxz9/IFKey/issues/8)
-> **Última atualização:** 2026-10-14
+> **Última atualização:** 2026-10-19
 >
 > Este documento define o contrato HTTP entre frontend e backend. A fonte viva é o
 > **Swagger** em `http://localhost:3000/docs`; mudanças no código devem ser refletidas aqui.
@@ -49,6 +49,9 @@ Resposta padrão de listagem:
   "meta": { "page": 1, "limit": 20, "total": 57, "totalPages": 3 }
 }
 ```
+
+> Exceção: `GET /administradores` mantém o formato legado
+> `{ "data": [], "total": 0, "page": 1, "limit": 10, "totalPages": 0 }`.
 
 ## 4. Formato de erro
 

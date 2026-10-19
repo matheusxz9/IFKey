@@ -17,7 +17,7 @@ Sistema de controle de empréstimo de chaves do IFRN. Projeto integrador I — 4
 
 ## Rodando o backend (jeito mais rápido)
 
-Pré-requisitos: **Node.js 22+**, **Docker** e **npm**.
+Pré-requisitos: **Node.js 20.19+** (o CI usa Node 20), **Docker** e **npm**.
 
 ```bash
 cd backend
