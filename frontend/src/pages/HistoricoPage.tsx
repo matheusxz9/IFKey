@@ -171,11 +171,11 @@ function HistoricoPage() {
           totalPaginas={totalPaginas}
           onAnterior={() => {
             const solicitanteId = isSolicitante && user?.tipo === "solicitante" ? user.id : undefined;
-            carregarHistorico(pagina - 1, { solicitanteId });
+            carregarHistorico(pagina - 1, { de: dataInicio, ate: dataFim, solicitanteId });
           }}
           onProxima={() => {
             const solicitanteId = isSolicitante && user?.tipo === "solicitante" ? user.id : undefined;
-            carregarHistorico(pagina + 1, { solicitanteId });
+            carregarHistorico(pagina + 1, { de: dataInicio, ate: dataFim, solicitanteId });
           }}
         />
       </section>

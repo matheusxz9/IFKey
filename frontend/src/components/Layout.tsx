@@ -87,7 +87,7 @@ export default function Layout() {
 
           {canAccessGestao && (
             <>
-              <p className="px-4 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <p className="px-4 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Administração
               </p>
               <NavLink to="/admin/chaves" className={linkClass} onClick={() => setMenuAberto(false)}>
@@ -101,7 +101,7 @@ export default function Layout() {
 
           {canAccessAdmin && (
             <>
-              <p className="px-4 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <p className="px-4 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Administradores
               </p>
               <NavLink to="/admin/administradores" className={linkClass} onClick={() => setMenuAberto(false)}>
@@ -113,10 +113,10 @@ export default function Layout() {
 
         <div className="border-t border-gray-800 px-5 py-4">
           <p className="truncate text-sm text-gray-400">{user?.nome}</p>
-          <p className="truncate text-xs text-gray-500">
+          <p className="truncate text-xs text-gray-400">
             {user?.tipo === "admin" ? user?.login : user?.matricula}
           </p>
-          <p className="truncate text-xs text-gray-600 capitalize">{user?.perfil?.toLowerCase()}</p>
+          <p className="truncate text-xs text-gray-400 capitalize">{user?.perfil?.toLowerCase()}</p>
           <button
             type="button"
             onClick={handleLogout}

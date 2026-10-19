@@ -54,6 +54,7 @@ describe('Fluxos de negócio (e2e)', () => {
   it('cria solicitante com sucesso (201, ativo default true)', async () => {
     const res = await request(server)
       .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         nome: 'Maria Silva',
         tipo: 'ALUNO',
@@ -71,6 +72,7 @@ describe('Fluxos de negócio (e2e)', () => {
   it('rejeita campo extra (400 VALIDACAO)', async () => {
     const res = await request(server)
       .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         nome: 'Joao',
         tipo: 'ALUNO',
@@ -85,6 +87,7 @@ describe('Fluxos de negócio (e2e)', () => {
   it('rejeita matrícula duplicada (409 MATRICULA_DUPLICADA)', async () => {
     const res = await request(server)
       .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         nome: 'Maria 2',
         tipo: 'PROFESSOR',
@@ -101,6 +104,7 @@ describe('Fluxos de negócio (e2e)', () => {
   it('cria chave com status DISPONIVEL (201)', async () => {
     const res = await request(server)
       .post('/api/chaves')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         codigo: 'LAB-01',
         descricao: 'Laboratório de Informática 1',
@@ -133,7 +137,10 @@ describe('Fluxos de negócio (e2e)', () => {
       administrador: { id: 1, nome: 'Admin Teste' },
     });
 
-    const chave = await request(server).get('/api/chaves/1').expect(200);
+    const chave = await request(server)
+      .get('/api/chaves/1')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
     expect(chave.body.status).toBe('EMPRESTADA');
   });
 
@@ -160,7 +167,10 @@ describe('Fluxos de negócio (e2e)', () => {
       dataHoraDevolucao: expect.any(String),
     });
 
-    const chave = await request(server).get('/api/chaves/1').expect(200);
+    const chave = await request(server)
+      .get('/api/chaves/1')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
     expect(chave.body.status).toBe('DISPONIVEL');
   });
 
@@ -183,7 +193,10 @@ describe('Fluxos de negócio (e2e)', () => {
       .send({ solicitanteId: 1, chaveId: 1 })
       .expect(201);
 
-    const res = await request(server).delete('/api/chaves/1').expect(409);
+    const res = await request(server)
+      .delete('/api/chaves/1')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(409);
     expect(res.body).toMatchObject({
       statusCode: 409,
       code: 'RECURSO_COM_EMPRESTIMO_ATIVO',

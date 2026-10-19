@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { Administrador } from './administrador.entity';
 import { Solicitante } from '../solicitantes/solicitante.entity';
 import {
@@ -76,7 +76,7 @@ export class AdministradoresService {
       );
     }
     const admin = this.repo.create({ ...dto, login });
-    return this.repo.save(admin);
+    return this.salvar(admin);
   }
 
   async atualizar(id: number, dto: AtualizarAdministradorDto) {
@@ -99,6 +99,24 @@ export class AdministradoresService {
 
     await this.repo.update(id, dto);
     return this.buscar(id);
+  }
+
+  private async salvar(admin: Administrador) {
+    try {
+      return await this.repo.save(admin);
+    } catch (error) {
+      throw this.traduzirViolacaoDeLogin(error);
+    }
+  }
+
+  private traduzirViolacaoDeLogin(error: unknown): Error {
+    if (
+      error instanceof QueryFailedError &&
+      (error.driverError as { code?: string } | undefined)?.code === '23505'
+    ) {
+      return new LoginDuplicadoException();
+    }
+    return error instanceof Error ? error : new Error(String(error));
   }
 
   async inativar(id: number) {

@@ -80,6 +80,16 @@ export class EmprestimosService {
       const emprestimoRepo = manager.getRepository(Emprestimo);
       const chaveRepo = manager.getRepository(Chave);
 
+      // Lock isolado na linha do empréstimo: aplicar "FOR UPDATE" junto com o
+      // join da chave é rejeitado pelo Postgres (outer join).
+      const emprestimoTravado = await emprestimoRepo.findOne({
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!emprestimoTravado) {
+        throw new NaoEncontradoException('Empréstimo não encontrado.');
+      }
+
       const emprestimo = await emprestimoRepo.findOne({
         where: { id },
         relations: { chave: true },

@@ -212,7 +212,7 @@ function GestaoChavesPage() {
       render: (chave) => (
         <span
           className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            chave.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-400"
+            chave.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-300"
           }`}
         >
           {chave.ativo ? "Ativo" : "Inativo"}

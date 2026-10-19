@@ -212,7 +212,7 @@ function GestaoSolicitantesPage() {
       titulo: "Ativo",
       render: (s) => (
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-          s.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-400"
+          s.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-300"
         }`}>
           {s.ativo ? "Ativo" : "Inativo"}
         </span>

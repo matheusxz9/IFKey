@@ -60,8 +60,14 @@ async function getValidAccessToken(): Promise<string | null> {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (resposta.ok) return token;
+    // Apenas 401/403 indicam token inválido. 429/5xx (ex.: rate limit) são
+    // falhas transitórias e não devem derrubar a sessão do usuário.
+    if (resposta.status !== 401 && resposta.status !== 403) {
+      return token;
+    }
   } catch {
-    // Ignore errors, will try refresh
+    // Falha de rede: mantém a sessão e deixa a requisição real expor o erro.
+    return token;
   }
 
   if (isRefreshing) {
@@ -98,7 +104,13 @@ export async function apiFetch<T = unknown>(
 
   let token: string | null = null;
   if (needsAuth) {
-    token = await getValidAccessToken();
+    try {
+      token = await getValidAccessToken();
+    } catch {
+      // Falha ao renovar o token (ex.: refresh inválido/ausente): trata como
+      // sessão expirada em vez de propagar o erro cru para a tela.
+      token = null;
+    }
     if (!token) {
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");

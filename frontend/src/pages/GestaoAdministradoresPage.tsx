@@ -266,7 +266,7 @@ function GestaoAdministradoresPage() {
       titulo: "Ativo",
       render: (a) => (
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-          a.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-400"
+          a.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-300"
         }`}>
           {a.ativo ? "Ativo" : "Inativo"}
         </span>
