@@ -13,6 +13,9 @@ describe('Fluxos de negócio (e2e)', () => {
   let app: INestApplication;
   let server: App;
   let token: string;
+  let tokenSolicitante: string;
+  let chaveDoSolicitante: number;
+  let emprestimoDoSolicitante: number;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -54,6 +57,7 @@ describe('Fluxos de negócio (e2e)', () => {
   it('cria solicitante com sucesso (201, ativo default true)', async () => {
     const res = await request(server)
       .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         nome: 'Maria Silva',
         tipo: 'ALUNO',
@@ -71,6 +75,7 @@ describe('Fluxos de negócio (e2e)', () => {
   it('rejeita campo extra (400 VALIDACAO)', async () => {
     const res = await request(server)
       .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         nome: 'Joao',
         tipo: 'ALUNO',
@@ -85,6 +90,7 @@ describe('Fluxos de negócio (e2e)', () => {
   it('rejeita matrícula duplicada (409 MATRICULA_DUPLICADA)', async () => {
     const res = await request(server)
       .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         nome: 'Maria 2',
         tipo: 'PROFESSOR',
@@ -101,6 +107,7 @@ describe('Fluxos de negócio (e2e)', () => {
   it('cria chave com status DISPONIVEL (201)', async () => {
     const res = await request(server)
       .post('/api/chaves')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         codigo: 'LAB-01',
         descricao: 'Laboratório de Informática 1',
@@ -133,7 +140,10 @@ describe('Fluxos de negócio (e2e)', () => {
       administrador: { id: 1, nome: 'Admin Teste' },
     });
 
-    const chave = await request(server).get('/api/chaves/1').expect(200);
+    const chave = await request(server)
+      .get('/api/chaves/1')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
     expect(chave.body.status).toBe('EMPRESTADA');
   });
 
@@ -160,7 +170,10 @@ describe('Fluxos de negócio (e2e)', () => {
       dataHoraDevolucao: expect.any(String),
     });
 
-    const chave = await request(server).get('/api/chaves/1').expect(200);
+    const chave = await request(server)
+      .get('/api/chaves/1')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
     expect(chave.body.status).toBe('DISPONIVEL');
   });
 
@@ -183,10 +196,136 @@ describe('Fluxos de negócio (e2e)', () => {
       .send({ solicitanteId: 1, chaveId: 1 })
       .expect(201);
 
-    const res = await request(server).delete('/api/chaves/1').expect(409);
+    const res = await request(server)
+      .delete('/api/chaves/1')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(409);
     expect(res.body).toMatchObject({
       statusCode: 409,
       code: 'RECURSO_COM_EMPRESTIMO_ATIVO',
+    });
+  });
+
+  it('SOLICITANTE registra empréstimo para si (201): ignora o solicitanteId do body e não grava administrador', async () => {
+    const joao = await request(server)
+      .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        nome: 'Joao Souza',
+        tipo: 'ALUNO',
+        matricula: '2024112346',
+        contato: 'joao@if.edu.br',
+      })
+      .expect(201);
+
+    tokenSolicitante = jwt.sign(
+      { sub: joao.body.id, login: '2024112346', perfil: 'SOLICITANTE' },
+      JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+
+    const chave = await request(server)
+      .post('/api/chaves')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        codigo: 'SOL-01',
+        descricao: 'Chave do solicitante',
+        localizacao: 'Bloco A - Sala 9',
+      })
+      .expect(201);
+    chaveDoSolicitante = chave.body.id;
+
+    const res = await request(server)
+      .post('/api/emprestimos')
+      .set('Authorization', `Bearer ${tokenSolicitante}`)
+      .send({ solicitanteId: 1, chaveId: chave.body.id })
+      .expect(201);
+    expect(res.body).toMatchObject({
+      status: 'EMPRESTADA',
+      solicitante: { id: joao.body.id, nome: 'Joao Souza' },
+      administrador: null,
+    });
+    emprestimoDoSolicitante = res.body.id;
+  });
+
+  it('SOLICITANTE devolve o próprio empréstimo (200) e a chave volta para DISPONIVEL', async () => {
+    const res = await request(server)
+      .patch(`/api/emprestimos/${emprestimoDoSolicitante}/devolucao`)
+      .set('Authorization', `Bearer ${tokenSolicitante}`)
+      .send({})
+      .expect(200);
+    expect(res.body).toMatchObject({
+      status: 'DEVOLVIDA',
+      dataHoraDevolucao: expect.any(String),
+    });
+
+    const chave = await request(server)
+      .get(`/api/chaves/${chaveDoSolicitante}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(chave.body.status).toBe('DISPONIVEL');
+  });
+
+  it('SOLICITANTE não acessa empréstimo de terceiros (403 SEM_PERMISSAO)', async () => {
+    const chave = await request(server)
+      .post('/api/chaves')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        codigo: 'SOL-02',
+        descricao: 'Chave da Maria',
+        localizacao: 'Bloco A - Sala 10',
+      })
+      .expect(201);
+
+    const emprestimoDaMaria = await request(server)
+      .post('/api/emprestimos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ solicitanteId: 1, chaveId: chave.body.id })
+      .expect(201);
+
+    const leitura = await request(server)
+      .get(`/api/emprestimos/${emprestimoDaMaria.body.id}`)
+      .set('Authorization', `Bearer ${tokenSolicitante}`)
+      .expect(403);
+    expect(leitura.body).toMatchObject({
+      statusCode: 403,
+      code: 'SEM_PERMISSAO',
+    });
+
+    const devolucao = await request(server)
+      .patch(`/api/emprestimos/${emprestimoDaMaria.body.id}/devolucao`)
+      .set('Authorization', `Bearer ${tokenSolicitante}`)
+      .send({})
+      .expect(403);
+    expect(devolucao.body).toMatchObject({
+      statusCode: 403,
+      code: 'SEM_PERMISSAO',
+    });
+
+    const conferencia = await request(server)
+      .get(`/api/emprestimos/${emprestimoDaMaria.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(conferencia.body.status).toBe('EMPRESTADA');
+  });
+
+  it('responde 404 para administrador inexistente (GET e DELETE)', async () => {
+    const leitura = await request(server)
+      .get('/api/administradores/999')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
+    expect(leitura.body).toMatchObject({
+      statusCode: 404,
+      code: 'NAO_ENCONTRADO',
+    });
+
+    const remocao = await request(server)
+      .delete('/api/administradores/999')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
+    expect(remocao.body).toMatchObject({
+      statusCode: 404,
+      code: 'NAO_ENCONTRADO',
     });
   });
 });

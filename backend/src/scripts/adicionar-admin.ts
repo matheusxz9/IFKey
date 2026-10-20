@@ -13,8 +13,14 @@ async function main() {
   const repo = AppDataSource.getRepository(Administrador);
   const existente = await repo.findOne({ where: { login } });
   if (existente) {
-    await repo.update(existente.id, { nome, ativo: true });
-    console.log(`Admin atualizado: ${login} (${nome})`);
+    await repo.update(existente.id, {
+      nome,
+      perfil: PerfilAdministrador.ADMINISTRADOR,
+      ativo: true,
+    });
+    console.log(
+      `Admin restaurado: ${login} (${nome}) — perfil ADMINISTRADOR, ativo`,
+    );
   } else {
     await repo.insert({
       login,

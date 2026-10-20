@@ -1,85 +1,164 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, EntityManager } from 'typeorm';
 import { Emprestimo } from './emprestimo.entity';
 import { Chave } from '../chaves/chave.entity';
+import { Solicitante } from '../solicitantes/solicitante.entity';
 import { CriarEmprestimoDto } from './dto/criar-emprestimo.dto';
 import { DevolverEmprestimoDto } from './dto/devolver-emprestimo.dto';
 import { ListarEmprestimosQueryDto } from './dto/listar-emprestimos.query.dto';
 import { HistoricoEmprestimosQueryDto } from './dto/historico-emprestimos.query.dto';
-import { ChavesService } from '../chaves/chaves.service';
-import { SolicitantesService } from '../solicitantes/solicitantes.service';
 import {
   ChaveIndisponivelException,
   EmprestimoJaDevolvidoException,
   NaoEncontradoException,
+  SemPermissaoException,
   SolicitanteInativoException,
 } from '../common/exceptions/app.exception';
 import { StatusChave } from '../common/enums/status-chave.enum';
 import { StatusEmprestimo } from '../common/enums/status-emprestimo.enum';
+import { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
 
 @Injectable()
 export class EmprestimosService {
   constructor(
     @InjectRepository(Emprestimo)
     private readonly repo: Repository<Emprestimo>,
-    private readonly chavesService: ChavesService,
-    private readonly solicitantesService: SolicitantesService,
   ) {}
 
-  async criar(dto: CriarEmprestimoDto, adminId: number) {
-    const solicitante = await this.solicitantesService.buscarMesmoInativo(
-      dto.solicitanteId,
-    );
-    if (!solicitante.ativo) {
-      throw new SolicitanteInativoException();
-    }
-    const chave = await this.chavesService.buscarMesmoInativo(dto.chaveId);
-    if (!chave.ativo || chave.status !== StatusChave.DISPONIVEL) {
-      throw new ChaveIndisponivelException();
-    }
-    const emprestimo = this.repo.create({
-      solicitante: { id: dto.solicitanteId },
-      chave: { id: dto.chaveId } as Chave,
-      administrador: { id: adminId },
-      status: StatusEmprestimo.EMPRESTADA,
-      observacoes: dto.observacoes,
-    });
-    await this.repo.manager.transaction(async (manager) => {
-      const salvo = await manager.save(emprestimo);
-      await manager.update(Chave, dto.chaveId, {
+  async criar(dto: CriarEmprestimoDto, usuarioId: number, perfil: string) {
+    const ehSolicitante =
+      (perfil as PerfilAdministrador) === PerfilAdministrador.SOLICITANTE;
+    const solicitanteId = ehSolicitante ? usuarioId : dto.solicitanteId;
+    return this.repo.manager.transaction(async (manager) => {
+      const solicitanteRepo = manager.getRepository(Solicitante);
+      const chaveRepo = manager.getRepository(Chave);
+      const emprestimoRepo = manager.getRepository(Emprestimo);
+
+      const solicitante = await solicitanteRepo.findOne({
+        where: { id: solicitanteId },
+      });
+      if (!solicitante) {
+        throw new NaoEncontradoException('Solicitante não encontrado.');
+      }
+      if (!solicitante.ativo) {
+        throw new SolicitanteInativoException();
+      }
+
+      const chave = await chaveRepo.findOne({
+        where: { id: dto.chaveId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!chave) {
+        throw new NaoEncontradoException('Chave não encontrada.');
+      }
+      if (!chave.ativo || chave.status !== StatusChave.DISPONIVEL) {
+        throw new ChaveIndisponivelException();
+      }
+
+      const emprestimo = emprestimoRepo.create({
+        solicitante: { id: solicitanteId },
+        chave: { id: dto.chaveId },
+        // Empréstimo registrado pelo próprio solicitante não tem administrador associado.
+        ...(ehSolicitante ? {} : { administrador: { id: usuarioId } }),
+        status: StatusEmprestimo.EMPRESTADA,
+        observacoes: dto.observacoes,
+      });
+      const salvo = await emprestimoRepo.save(emprestimo);
+
+      await chaveRepo.update(dto.chaveId, {
         status: StatusChave.EMPRESTADA,
       });
-      return salvo;
+
+      return this.toResponse(
+        await this.buscarEntidadeComManager(manager, salvo.id),
+      );
     });
-    return this.toResponse(await this.buscarEntidade(emprestimo.id));
   }
 
-  async devolver(id: number, dto: DevolverEmprestimoDto) {
-    const emprestimo = await this.buscarEntidade(id);
-    if (emprestimo.status === StatusEmprestimo.DEVOLVIDA) {
-      throw new EmprestimoJaDevolvidoException();
-    }
-    await this.repo.manager.transaction(async (manager) => {
-      await manager.update(Emprestimo, id, {
+  async devolver(
+    id: number,
+    dto: DevolverEmprestimoDto,
+    user?: { id: number; perfil: string },
+  ) {
+    return this.repo.manager.transaction(async (manager) => {
+      const emprestimoRepo = manager.getRepository(Emprestimo);
+      const chaveRepo = manager.getRepository(Chave);
+
+      // Lock isolado na linha do empréstimo: aplicar "FOR UPDATE" junto com o
+      // join da chave é rejeitado pelo Postgres (outer join).
+      const emprestimoTravado = await emprestimoRepo.findOne({
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!emprestimoTravado) {
+        throw new NaoEncontradoException('Empréstimo não encontrado.');
+      }
+
+      const emprestimo = await emprestimoRepo.findOne({
+        where: { id },
+        relations: { chave: true, solicitante: true },
+      });
+      if (!emprestimo) {
+        throw new NaoEncontradoException('Empréstimo não encontrado.');
+      }
+      this.garantirProprioEmprestimo(emprestimo, user);
+      if (emprestimo.status === StatusEmprestimo.DEVOLVIDA) {
+        throw new EmprestimoJaDevolvidoException();
+      }
+
+      // O `FOR UPDATE` não pode ser aplicado junto do join de `relations`
+      // (erro do Postgres), então o lock é feito apenas na linha da chave
+      // para serializar devoluções concorrentes.
+      await chaveRepo.findOne({
+        where: { id: emprestimo.chave.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      await emprestimoRepo.update(id, {
         status: StatusEmprestimo.DEVOLVIDA,
         dataHoraDevolucao: new Date(),
         ...(dto.observacoes ? { observacoes: dto.observacoes } : {}),
       });
-      await manager.update(Chave, emprestimo.chave.id, {
+
+      await chaveRepo.update(emprestimo.chave.id, {
         status: StatusChave.DISPONIVEL,
       });
+
+      return this.toResponse(await this.buscarEntidadeComManager(manager, id));
     });
-    return this.toResponse(await this.buscarEntidade(id));
   }
 
-  async listar(query: ListarEmprestimosQueryDto) {
+  private async buscarEntidadeComManager(
+    manager: EntityManager,
+    id: number,
+  ): Promise<Emprestimo> {
+    const emprestimo = await manager.findOne(Emprestimo, {
+      where: { id },
+      relations: {
+        solicitante: true,
+        chave: true,
+        administrador: true,
+      },
+    });
+    if (!emprestimo) {
+      throw new NaoEncontradoException('Empréstimo não encontrado.');
+    }
+    return emprestimo;
+  }
+
+  async listar(
+    query: ListarEmprestimosQueryDto,
+    user?: { id: number; perfil: string },
+  ) {
+    const solicitanteId =
+      user?.perfil === PerfilAdministrador.SOLICITANTE
+        ? user.id
+        : query.solicitanteId;
     const [data, total] = await this.repo.findAndCount({
       where: {
         ...(query.status ? { status: query.status } : {}),
-        ...(query.solicitanteId
-          ? { solicitante: { id: query.solicitanteId } }
-          : {}),
+        ...(solicitanteId ? { solicitante: { id: solicitanteId } } : {}),
         ...(query.chaveId ? { chave: { id: query.chaveId } } : {}),
       },
       relations: {
@@ -102,25 +181,44 @@ export class EmprestimosService {
     };
   }
 
-  async historico(query: HistoricoEmprestimosQueryDto) {
+  async historico(
+    query: HistoricoEmprestimosQueryDto,
+    user?: { id: number; perfil: string },
+  ) {
     const qb = this.repo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.solicitante', 's')
       .leftJoinAndSelect('e.chave', 'c')
       .leftJoinAndSelect('e.administrador', 'a')
-      .where('e.status = :status', { status: StatusEmprestimo.DEVOLVIDA })
-      .orderBy('e.dataHoraDevolucao', 'DESC');
+      .addSelect(
+        `CASE WHEN e.status = '${StatusEmprestimo.EMPRESTADA}' THEN 0 ELSE 1 END`,
+        'ordem_status',
+      )
+      .orderBy('ordem_status', 'ASC')
+      .addOrderBy('e.dataHoraEmprestimo', 'DESC');
+
+    if (user?.perfil === PerfilAdministrador.SOLICITANTE) {
+      qb.andWhere('e.solicitante = :solicitanteId', {
+        solicitanteId: user.id,
+      });
+    } else {
+      const solicitanteId = query.solicitanteId;
+      if (solicitanteId) {
+        qb.andWhere('e.solicitante = :solicitanteId', { solicitanteId });
+      }
+    }
+
     const de = query.de;
     if (de) {
-      qb.andWhere('e.dataHoraDevolucao >= :de', { de: new Date(de) });
+      qb.andWhere('e.dataHoraEmprestimo >= :de', {
+        de: this.inicioDoDia(de),
+      });
     }
     const ate = query.ate;
     if (ate) {
-      qb.andWhere('e.dataHoraDevolucao <= :ate', { ate: new Date(ate) });
-    }
-    const solicitanteId = query.solicitanteId;
-    if (solicitanteId) {
-      qb.andWhere('e.solicitante = :solicitanteId', { solicitanteId });
+      qb.andWhere('e.dataHoraEmprestimo <= :ate', {
+        ate: this.fimDoDia(ate),
+      });
     }
     const chaveId = query.chaveId;
     if (chaveId) {
@@ -139,8 +237,24 @@ export class EmprestimosService {
     };
   }
 
-  async buscar(id: number) {
-    return this.toResponse(await this.buscarEntidade(id));
+  async buscar(id: number, user?: { id: number; perfil: string }) {
+    const emprestimo = await this.buscarEntidade(id);
+    this.garantirProprioEmprestimo(emprestimo, user);
+    return this.toResponse(emprestimo);
+  }
+
+  private garantirProprioEmprestimo(
+    emprestimo: Emprestimo,
+    user?: { id: number; perfil: string },
+  ) {
+    if (
+      user?.perfil === PerfilAdministrador.SOLICITANTE &&
+      emprestimo.solicitante?.id !== user.id
+    ) {
+      throw new SemPermissaoException(
+        'Solicitante só pode acessar os próprios empréstimos.',
+      );
+    }
   }
 
   private async buscarEntidade(id: number): Promise<Emprestimo> {
@@ -156,6 +270,18 @@ export class EmprestimosService {
       throw new NaoEncontradoException('Empréstimo não encontrado.');
     }
     return emprestimo;
+  }
+
+  private inicioDoDia(valor: string): Date {
+    return valor.length === 10
+      ? new Date(`${valor}T00:00:00`)
+      : new Date(valor);
+  }
+
+  private fimDoDia(valor: string): Date {
+    return valor.length === 10
+      ? new Date(`${valor}T23:59:59.999`)
+      : new Date(valor);
   }
 
   private toResponse(e: Emprestimo) {

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
@@ -15,9 +16,22 @@ export class AuthController {
     return this.authService.loginSuap(dto.code);
   }
 
-  @Get('me')
+  @Post('refresh')
+  async refresh(@Body() dto: { refreshToken: string }) {
+    return this.authService.refreshTokens(dto.refreshToken);
+  }
+
+  @Post('logout')
   @UseGuards(JwtAuthGuard)
-  me(@CurrentUser() user: { id: number }) {
-    return this.authService.perfil(user.id);
+  async logout(@Body() dto: { refreshToken: string }) {
+    await this.authService.revokeRefreshToken(dto.refreshToken);
+    return { message: 'Logout realizado com sucesso.' };
+  }
+
+  @Get('me')
+  @SkipThrottle()
+  @UseGuards(JwtAuthGuard)
+  me(@CurrentUser() user: { id: number; perfil: string }) {
+    return this.authService.perfil(user.id, user.perfil);
   }
 }
