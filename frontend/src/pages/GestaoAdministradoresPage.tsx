@@ -14,17 +14,21 @@ import Modal from "../components/Modal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
+import { Alerta } from "../components/ui/Alerta";
+import { Botao } from "../components/ui/Botao";
+import { Cartao, Contagem } from "../components/ui/Cartao";
+import { Campo, Entrada, EntradaBusca, Selecao } from "../components/ui/Campos";
+import { Icone } from "../components/ui/Icone";
+import { Selo, type VarianteSelo } from "../components/ui/Selo";
+import { formatarPerfil, pluralizar } from "../utils/formatacao";
 
 type ModalTipo = "cadastro" | "edicao" | null;
 
-function formatarPerfil(perfil: PerfilAdministrador) {
-  switch (perfil) {
-    case "ADMINISTRADOR": return "Administrador";
-    case "GESTOR": return "Gestor";
-    case "SOLICITANTE": return "Solicitante";
-    default: return perfil;
-  }
-}
+const variantePerfil: Record<PerfilAdministrador, VarianteSelo> = {
+  ADMINISTRADOR: "administrador",
+  GESTOR: "gestor",
+  SOLICITANTE: "solicitante",
+};
 
 function GestaoAdministradoresPage() {
   const toast = useToast();
@@ -39,6 +43,7 @@ function GestaoAdministradoresPage() {
 
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
   const [administradorEmEdicao, setAdministradorEmEdicao] = useState<Administrador | null>(null);
@@ -88,6 +93,7 @@ function GestaoAdministradoresPage() {
       setAdministradores(resposta.data);
       setPagina(resposta.page);
       setTotalPaginas(resposta.totalPages);
+      setTotal(resposta.total);
     } catch (error) {
       if (requisicao !== requisicaoRef.current) return;
       setErro(error instanceof Error ? error.message : "Erro ao carregar os administradores.");
@@ -105,6 +111,15 @@ function GestaoAdministradoresPage() {
   function buscar() {
     setPagina(1);
     carregarAdministradores(1);
+  }
+
+  function limparFiltros() {
+    setBuscaNome("");
+    setBuscaLogin("");
+    setPerfil("");
+    setAtivo("");
+    setPagina(1);
+    carregarAdministradores(1, { nome: "", login: "", perfil: "", ativo: "" });
   }
 
   function abrirModalCadastro() {
@@ -245,63 +260,72 @@ function GestaoAdministradoresPage() {
     }
   }
 
+  const temFiltros = Boolean(buscaNome || buscaLogin || perfil || ativo !== "");
+
   const colunas: Coluna<Administrador>[] = [
     { key: "nome", titulo: "Nome" },
-    { key: "login", titulo: "Login" },
+    { key: "login", titulo: "Login", mono: true },
     {
       key: "perfil",
       titulo: "Perfil",
       render: (a) => (
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-          a.perfil === "ADMINISTRADOR" ? "bg-red-900 text-red-300"
-          : a.perfil === "GESTOR" ? "bg-blue-900 text-blue-300"
-          : "bg-green-900 text-green-300"
-        }`}>
+        <Selo variante={variantePerfil[a.perfil] ?? "gestor"}>
           {formatarPerfil(a.perfil)}
-        </span>
+        </Selo>
       ),
     },
     {
       key: "ativo",
       titulo: "Ativo",
       render: (a) => (
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-          a.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-300"
-        }`}>
+        <Selo variante={a.ativo ? "ativo" : "inativo"}>
           {a.ativo ? "Ativo" : "Inativo"}
-        </span>
+        </Selo>
       ),
     },
     {
       key: "acoes",
       titulo: "Ações",
+      acoes: true,
       render: (a) => (
-        <div className="flex gap-2">
-          <button type="button" aria-label={`Editar administrador ${a.nome}`}
+        <div className="flex flex-wrap gap-1">
+          <Botao
+            tamanho="sm"
+            variante="sutil"
+            aria-label={`Editar administrador ${a.nome}`}
             onClick={() => abrirModalEdicao(a)}
-            className="rounded-md border border-gray-700 px-3 py-1 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer">
+          >
             Editar
-          </button>
-          {a.ativo && (
-            <button type="button" aria-label={`Tornar ${a.nome} solicitante`}
-              onClick={() => abrirModalConversao(a)}
-              className="rounded-md border border-amber-700 px-3 py-1 text-sm font-medium text-amber-400 hover:bg-amber-950/40 cursor-pointer">
-              Tornar solicitante
-            </button>
-          )}
-          {a.ativo && (
-            <button type="button" aria-label={`Inativar administrador ${a.nome}`}
-              onClick={() => setAdministradorParaInativar(a)}
-              className="rounded-md border border-red-800 px-3 py-1 text-sm font-medium text-red-400 hover:bg-red-950/40 cursor-pointer">
-              Inativar
-            </button>
-          )}
-          {!a.ativo && (
-            <button type="button" aria-label={`Reativar administrador ${a.nome}`}
-              onClick={() => executarReativacao(a)} disabled={reativando}
-              className="rounded-md border border-green-800 px-3 py-1 text-sm font-medium text-green-400 hover:bg-green-950/40 disabled:opacity-40 cursor-pointer">
+          </Botao>
+          {a.ativo ? (
+            <>
+              <Botao
+                tamanho="sm"
+                variante="sutil-ambar"
+                aria-label={`Tornar ${a.nome} solicitante`}
+                onClick={() => abrirModalConversao(a)}
+              >
+                Tornar solicitante
+              </Botao>
+              <Botao
+                tamanho="sm"
+                variante="sutil-perigo"
+                aria-label={`Inativar administrador ${a.nome}`}
+                onClick={() => setAdministradorParaInativar(a)}
+              >
+                Inativar
+              </Botao>
+            </>
+          ) : (
+            <Botao
+              tamanho="sm"
+              variante="sutil-verde"
+              aria-label={`Reativar administrador ${a.nome}`}
+              onClick={() => executarReativacao(a)}
+              disabled={reativando}
+            >
               Reativar
-            </button>
+            </Botao>
           )}
         </div>
       ),
@@ -310,155 +334,231 @@ function GestaoAdministradoresPage() {
 
   return (
     <>
-      <div className="mx-auto max-w-6xl">
-        <PageHeader titulo="Gestão de administradores" subtitulo="Cadastre, edite e gerencie os administradores do sistema.">
-          <button type="button" onClick={abrirModalCadastro}
-            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer">
+      <div className="mx-auto w-full max-w-6xl">
+        <PageHeader
+          titulo="Gestão de administradores"
+          subtitulo="Cadastre, edite e gerencie os administradores do sistema."
+        >
+          <Botao
+            variante="primario"
+            onClick={abrirModalCadastro}
+            icone={<Icone nome="mais" />}
+          >
             Novo administrador
-          </button>
+          </Botao>
         </PageHeader>
 
-        <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-800 bg-gray-900 p-5 md:flex-row">
-          <input type="text" placeholder="Buscar por nome..." aria-label="Buscar administradores por nome"
-            value={buscaNome}
-            onChange={(e) => setBuscaNome(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") buscar(); }}
-            className="flex-1 rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-          <input type="text" placeholder="Buscar por login..." aria-label="Buscar administradores por login"
-            value={buscaLogin}
-            onChange={(e) => setBuscaLogin(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") buscar(); }}
-            className="flex-1 rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-          <select value={perfil} aria-label="Filtrar por perfil do administrador"
-            onChange={(e) => {
-              const novoPerfil = e.target.value as PerfilAdministrador | "";
-              setPerfil(novoPerfil);
-              setPagina(1);
-              void carregarAdministradores(1, { nome: buscaNome, login: buscaLogin, perfil: novoPerfil, ativo });
-            }}
-            className="rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
-            <option value="">Todos os perfis</option>
-            <option value="ADMINISTRADOR">Administrador</option>
-            <option value="GESTOR">Gestor</option>
-          </select>
-          <select value={ativo === "" ? "" : String(ativo)} aria-label="Filtrar por situação do cadastro"
-            onChange={(e) => {
-              const valor = e.target.value;
-              const novoAtivo = valor === "" ? "" : valor === "true";
-              setAtivo(novoAtivo);
-              setPagina(1);
-              void carregarAdministradores(1, { nome: buscaNome, login: buscaLogin, perfil, ativo: novoAtivo });
-            }}
-            className="rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
-            <option value="">Todos</option>
-            <option value="true">Ativos</option>
-            <option value="false">Inativos</option>
-          </select>
-          <button type="button" onClick={buscar}
-            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer">
-            Buscar
-          </button>
+        <section className="mb-6 rounded-xl border border-linha bg-superficie p-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <EntradaBusca
+              rotulo="Buscar administradores por nome"
+              placeholder="Buscar por nome..."
+              value={buscaNome}
+              onChange={(e) => setBuscaNome(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") buscar();
+              }}
+            />
+            <EntradaBusca
+              rotulo="Buscar administradores por login"
+              placeholder="Buscar por login..."
+              value={buscaLogin}
+              onChange={(e) => setBuscaLogin(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") buscar();
+              }}
+              classNameWrapper="xl:max-w-xs"
+            />
+            <Selecao
+              value={perfil}
+              aria-label="Filtrar por perfil do administrador"
+              onChange={(e) => {
+                const novoPerfil = e.target.value as PerfilAdministrador | "";
+                setPerfil(novoPerfil);
+                setPagina(1);
+                void carregarAdministradores(1, { nome: buscaNome, login: buscaLogin, perfil: novoPerfil, ativo });
+              }}
+              className="xl:w-44"
+            >
+              <option value="">Todos os perfis</option>
+              <option value="ADMINISTRADOR">Administrador</option>
+              <option value="GESTOR">Gestor</option>
+            </Selecao>
+            <Selecao
+              value={ativo === "" ? "" : String(ativo)}
+              aria-label="Filtrar por situação do cadastro"
+              onChange={(e) => {
+                const valor = e.target.value;
+                const novoAtivo = valor === "" ? "" : valor === "true";
+                setAtivo(novoAtivo);
+                setPagina(1);
+                void carregarAdministradores(1, { nome: buscaNome, login: buscaLogin, perfil, ativo: novoAtivo });
+              }}
+              className="xl:w-48"
+            >
+              <option value="">Todas as situações</option>
+              <option value="true">Ativos</option>
+              <option value="false">Inativos</option>
+            </Selecao>
+            <div className="flex items-center gap-2.5">
+              <Botao
+                variante="primario"
+                onClick={buscar}
+                icone={<Icone nome="buscar" />}
+                className="flex-1 xl:flex-none"
+              >
+                Buscar
+              </Botao>
+              {temFiltros && (
+                <Botao variante="sutil" onClick={limparFiltros}>
+                  Limpar
+                </Botao>
+              )}
+            </div>
+          </div>
         </section>
 
-        {erro && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400" role="alert">{erro}</div>
-        )}
+        {erro && <Alerta className="mb-6">{erro}</Alerta>}
 
-        <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
-          <DataTable colunas={colunas} dados={administradores}
-            carregando={carregando} mensagemVazia="Nenhum administrador encontrado." />
-          <Pagination paginaAtual={pagina} totalPaginas={totalPaginas}
+        <Cartao
+          semRecuo
+          acao={
+            <Contagem>
+              {pluralizar(total, "administrador encontrado", "administradores encontrados")}
+            </Contagem>
+          }
+        >
+          <DataTable
+            colunas={colunas}
+            dados={administradores}
+            carregando={carregando}
+            mensagemVazia="Nenhum administrador encontrado."
+            dicaVazia="Ajuste a busca e os filtros ou cadastre um novo administrador."
+          />
+          <Pagination
+            paginaAtual={pagina}
+            totalPaginas={totalPaginas}
             onAnterior={() => carregarAdministradores(pagina - 1)}
-            onProxima={() => carregarAdministradores(pagina + 1)} />
-        </section>
+            onProxima={() => carregarAdministradores(pagina + 1)}
+          />
+        </Cartao>
       </div>
 
-      <Modal aberto={!!modalTipo} onClose={fecharModal}
-        titulo={modalTipo === "cadastro" ? "Novo administrador" : "Editar administrador"}>
-        <div className="mb-4">
-          <label htmlFor="nome" className="mb-2 block text-sm font-medium">Nome</label>
-          <input id="nome" type="text" value={nome} onChange={(e) => setNome(e.target.value)}
-            placeholder="Nome completo"
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-        </div>
-        {modalTipo === "cadastro" && (
-          <div className="mb-4">
-            <label htmlFor="login" className="mb-2 block text-sm font-medium">Login (SUAP)</label>
-            <input id="login" type="text" value={login} onChange={(e) => setLogin(e.target.value)}
-              placeholder="Login do SUAP"
-              className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
+      <Modal
+        aberto={!!modalTipo}
+        onClose={fecharModal}
+        titulo={modalTipo === "cadastro" ? "Novo administrador" : "Editar administrador"}
+      >
+        <div className="space-y-4">
+          <Campo label="Nome" htmlFor="nome">
+            <Entrada
+              id="nome"
+              type="text"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Nome completo"
+            />
+          </Campo>
+          {modalTipo === "cadastro" && (
+            <Campo label="Login (SUAP)" htmlFor="login">
+              <Entrada
+                id="login"
+                type="text"
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+                placeholder="Login do SUAP"
+              />
+            </Campo>
+          )}
+          <Campo label="Perfil" htmlFor="perfil">
+            <Selecao
+              id="perfil"
+              value={perfilForm}
+              onChange={(e) => setPerfilForm(e.target.value as PerfilAdministrador)}
+            >
+              <option value="ADMINISTRADOR">Administrador</option>
+              <option value="GESTOR">Gestor</option>
+            </Selecao>
+          </Campo>
+
+          {erroModal && <Alerta>{erroModal}</Alerta>}
+
+          <div className="flex flex-wrap justify-end gap-2.5 pt-1">
+            <Botao variante="secundario" onClick={fecharModal} disabled={salvando}>
+              Cancelar
+            </Botao>
+            <Botao variante="primario" onClick={confirmarSalvar} carregando={salvando}>
+              {salvando ? "Salvando..." : modalTipo === "cadastro" ? "Cadastrar" : "Salvar"}
+            </Botao>
           </div>
-        )}
-        <div className="mb-4">
-          <label htmlFor="perfil" className="mb-2 block text-sm font-medium">Perfil</label>
-          <select id="perfil" value={perfilForm} onChange={(e) => setPerfilForm(e.target.value as PerfilAdministrador)}
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
-            <option value="ADMINISTRADOR">Administrador</option>
-            <option value="GESTOR">Gestor</option>
-          </select>
-        </div>
-        {erroModal && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-400" role="alert">{erroModal}</div>
-        )}
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={fecharModal} disabled={salvando}
-            className="rounded-md border border-gray-700 px-5 py-3 font-semibold text-gray-300 hover:bg-gray-800 disabled:opacity-40 cursor-pointer">
-            Cancelar
-          </button>
-          <button type="button" onClick={confirmarSalvar} disabled={salvando}
-            className="rounded-md bg-green-700 px-5 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40">
-            {salvando ? "Salvando..." : modalTipo === "cadastro" ? "Cadastrar" : "Salvar"}
-          </button>
         </div>
       </Modal>
 
-      <ConfirmDialog aberto={!!administradorParaInativar} onClose={() => setAdministradorParaInativar(null)}
-        onConfirmar={executarInativacao} titulo="Inativar administrador"
+      <ConfirmDialog
+        aberto={!!administradorParaInativar}
+        onClose={() => setAdministradorParaInativar(null)}
+        onConfirmar={executarInativacao}
+        titulo="Inativar administrador"
         mensagem={`Tem certeza que deseja inativar ${administradorParaInativar?.nome}?`}
-        textoConfirmar="Confirmar inativação" carregando={inativando} />
+        textoConfirmar="Confirmar inativação"
+        carregando={inativando}
+      />
 
-      <Modal aberto={!!adminParaConverter} onClose={fecharModalConversao}
-        titulo="Tornar administrador em solicitante">
-        <p className="mb-4 text-sm text-gray-400">
-          O administrador <strong className="text-gray-200">{adminParaConverter?.nome}</strong> será
-          inativado e passará a acessar o sistema como solicitante, com a matrícula informada.
-        </p>
-        <div className="mb-4">
-          <label htmlFor="tipoConversao" className="mb-2 block text-sm font-medium">Tipo</label>
-          <select id="tipoConversao" value={tipoConversao}
-            onChange={(e) => setTipoConversao(e.target.value as TipoSolicitante)}
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
-            <option value="ALUNO">Aluno</option>
-            <option value="PROFESSOR">Professor</option>
-            <option value="SERVIDOR">Servidor</option>
-          </select>
-        </div>
-        <div className="mb-4">
-          <label htmlFor="matriculaConversao" className="mb-2 block text-sm font-medium">Matrícula (SUAP)</label>
-          <input id="matriculaConversao" type="text" value={matriculaConversao}
-            onChange={(e) => setMatriculaConversao(e.target.value)}
-            placeholder="Matrícula do SUAP"
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-        </div>
-        <div className="mb-4">
-          <label htmlFor="contatoConversao" className="mb-2 block text-sm font-medium">Contato (opcional)</label>
-          <input id="contatoConversao" type="text" value={contatoConversao}
-            onChange={(e) => setContatoConversao(e.target.value)}
-            placeholder="E-mail ou telefone"
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-        </div>
-        {erroConversao && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-400" role="alert">{erroConversao}</div>
-        )}
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={fecharModalConversao} disabled={convertendo}
-            className="rounded-md border border-gray-700 px-5 py-3 font-semibold text-gray-300 hover:bg-gray-800 disabled:opacity-40 cursor-pointer">
-            Cancelar
-          </button>
-          <button type="button" onClick={confirmarConversao} disabled={convertendo}
-            className="rounded-md bg-amber-700 px-5 py-3 font-semibold text-white hover:bg-amber-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40">
-            {convertendo ? "Convertendo..." : "Converter"}
-          </button>
+      <Modal
+        aberto={!!adminParaConverter}
+        onClose={fecharModalConversao}
+        titulo="Tornar administrador em solicitante"
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed text-texto-medio">
+            O administrador{" "}
+            <strong className="font-semibold text-texto">
+              {adminParaConverter?.nome}
+            </strong>{" "}
+            será inativado e passará a acessar o sistema como solicitante, com a
+            matrícula informada.
+          </p>
+
+          <Campo label="Tipo" htmlFor="tipoConversao">
+            <Selecao
+              id="tipoConversao"
+              value={tipoConversao}
+              onChange={(e) => setTipoConversao(e.target.value as TipoSolicitante)}
+            >
+              <option value="ALUNO">Aluno</option>
+              <option value="PROFESSOR">Professor</option>
+              <option value="SERVIDOR">Servidor</option>
+            </Selecao>
+          </Campo>
+          <Campo label="Matrícula (SUAP)" htmlFor="matriculaConversao">
+            <Entrada
+              id="matriculaConversao"
+              type="text"
+              value={matriculaConversao}
+              onChange={(e) => setMatriculaConversao(e.target.value)}
+              placeholder="Matrícula do SUAP"
+            />
+          </Campo>
+          <Campo label="Contato (opcional)" htmlFor="contatoConversao">
+            <Entrada
+              id="contatoConversao"
+              type="text"
+              value={contatoConversao}
+              onChange={(e) => setContatoConversao(e.target.value)}
+              placeholder="E-mail ou telefone"
+            />
+          </Campo>
+
+          {erroConversao && <Alerta>{erroConversao}</Alerta>}
+
+          <div className="flex flex-wrap justify-end gap-2.5 pt-1">
+            <Botao variante="secundario" onClick={fecharModalConversao} disabled={convertendo}>
+              Cancelar
+            </Botao>
+            <Botao variante="aviso" onClick={confirmarConversao} carregando={convertendo}>
+              {convertendo ? "Convertendo..." : "Converter"}
+            </Botao>
+          </div>
         </div>
       </Modal>
     </>

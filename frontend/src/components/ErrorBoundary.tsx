@@ -1,4 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Botao } from "./ui/Botao";
+import { Icone } from "./ui/Icone";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -25,17 +27,16 @@ export default class ErrorBoundary extends Component<
   render() {
     if (this.state.erro) {
       return (
-        <div className="p-8 text-center">
-          <p className="mb-4 text-gray-400">
+        <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-xl border border-veu-vermelho bg-superficie px-6 py-12 text-center">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full border border-vermelho/30 bg-veu-vermelho text-vermelho">
+            <Icone nome="alerta" className="h-5 w-5" />
+          </span>
+          <p className="text-sm text-texto-medio">
             Não foi possível carregar esta página.
           </p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="rounded-md bg-green-700 px-5 py-2 font-semibold text-white hover:bg-green-800 cursor-pointer"
-          >
+          <Botao variante="primario" className="mt-1" onClick={() => window.location.reload()}>
             Recarregar
-          </button>
+          </Botao>
         </div>
       );
     }

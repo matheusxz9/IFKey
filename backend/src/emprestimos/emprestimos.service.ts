@@ -12,6 +12,7 @@ import {
   ChaveIndisponivelException,
   EmprestimoJaDevolvidoException,
   NaoEncontradoException,
+  SemPermissaoException,
   SolicitanteInativoException,
 } from '../common/exceptions/app.exception';
 import { StatusChave } from '../common/enums/status-chave.enum';
@@ -25,11 +26,10 @@ export class EmprestimosService {
     private readonly repo: Repository<Emprestimo>,
   ) {}
 
-  async criar(dto: CriarEmprestimoDto, adminId: number, perfil: string) {
-    let solicitanteId = dto.solicitanteId;
-    if (perfil === 'SOLICITANTE') {
-      solicitanteId = adminId;
-    }
+  async criar(dto: CriarEmprestimoDto, usuarioId: number, perfil: string) {
+    const ehSolicitante =
+      (perfil as PerfilAdministrador) === PerfilAdministrador.SOLICITANTE;
+    const solicitanteId = ehSolicitante ? usuarioId : dto.solicitanteId;
     return this.repo.manager.transaction(async (manager) => {
       const solicitanteRepo = manager.getRepository(Solicitante);
       const chaveRepo = manager.getRepository(Chave);
@@ -59,7 +59,8 @@ export class EmprestimosService {
       const emprestimo = emprestimoRepo.create({
         solicitante: { id: solicitanteId },
         chave: { id: dto.chaveId },
-        administrador: { id: adminId },
+        // Empréstimo registrado pelo próprio solicitante não tem administrador associado.
+        ...(ehSolicitante ? {} : { administrador: { id: usuarioId } }),
         status: StatusEmprestimo.EMPRESTADA,
         observacoes: dto.observacoes,
       });
@@ -75,7 +76,11 @@ export class EmprestimosService {
     });
   }
 
-  async devolver(id: number, dto: DevolverEmprestimoDto) {
+  async devolver(
+    id: number,
+    dto: DevolverEmprestimoDto,
+    user?: { id: number; perfil: string },
+  ) {
     return this.repo.manager.transaction(async (manager) => {
       const emprestimoRepo = manager.getRepository(Emprestimo);
       const chaveRepo = manager.getRepository(Chave);
@@ -92,11 +97,12 @@ export class EmprestimosService {
 
       const emprestimo = await emprestimoRepo.findOne({
         where: { id },
-        relations: { chave: true },
+        relations: { chave: true, solicitante: true },
       });
       if (!emprestimo) {
         throw new NaoEncontradoException('Empréstimo não encontrado.');
       }
+      this.garantirProprioEmprestimo(emprestimo, user);
       if (emprestimo.status === StatusEmprestimo.DEVOLVIDA) {
         throw new EmprestimoJaDevolvidoException();
       }
@@ -231,8 +237,24 @@ export class EmprestimosService {
     };
   }
 
-  async buscar(id: number) {
-    return this.toResponse(await this.buscarEntidade(id));
+  async buscar(id: number, user?: { id: number; perfil: string }) {
+    const emprestimo = await this.buscarEntidade(id);
+    this.garantirProprioEmprestimo(emprestimo, user);
+    return this.toResponse(emprestimo);
+  }
+
+  private garantirProprioEmprestimo(
+    emprestimo: Emprestimo,
+    user?: { id: number; perfil: string },
+  ) {
+    if (
+      user?.perfil === PerfilAdministrador.SOLICITANTE &&
+      emprestimo.solicitante?.id !== user.id
+    ) {
+      throw new SemPermissaoException(
+        'Solicitante só pode acessar os próprios empréstimos.',
+      );
+    }
   }
 
   private async buscarEntidade(id: number): Promise<Emprestimo> {

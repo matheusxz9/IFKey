@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth, type User } from "../contexts/AuthContext";
+import { Alerta } from "../components/ui/Alerta";
+import { TelaCarregando } from "../components/ui/Estado";
+import logoIfkey from "../assets/logo-ifkey.png";
 
 function SuapCallbackPage() {
   const navigate = useNavigate();
@@ -64,25 +67,29 @@ function SuapCallbackPage() {
 
   if (erro) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-950">
-        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-8 text-center">
-          <h1 className="mb-3 text-xl font-bold text-red-500">
-            Erro ao entrar
-          </h1>
+      <main className="flex min-h-screen items-center justify-center bg-tela px-4 py-12">
+        <section className="w-full max-w-md rounded-xl border border-linha bg-superficie p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <img src={logoIfkey} alt="" className="h-8 w-8 object-contain" />
+            <span className="font-semibold text-texto">IFKey</span>
+          </div>
 
-          <p className="text-gray-400">{erro}</p>
+          <h1 className="text-lg leading-snug text-texto">Erro ao entrar</h1>
+
+          <Alerta className="mt-4">{erro}</Alerta>
+
+          <Link
+            to="/"
+            className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-verde px-4 py-2.5 text-sm font-semibold text-tinta transition-colors hover:bg-verde-vivo"
+          >
+            Voltar para o acesso
+          </Link>
         </section>
       </main>
     );
   }
 
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-950">
-      <p className="text-gray-400" role="status">
-        Entrando no IFKey...
-      </p>
-    </main>
-  );
+  return <TelaCarregando mensagem="Entrando no IFKey..." />;
 }
 
 export default SuapCallbackPage;

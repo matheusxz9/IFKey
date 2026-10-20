@@ -2,6 +2,17 @@ import { AppError } from "./AppError";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+export const EVENTO_USUARIO_ATUALIZADO = "ifkey:usuario-atualizado";
+
+interface UsuarioSessao {
+  id: number;
+  nome: string;
+  perfil: string;
+  tipo: "admin" | "solicitante";
+  login?: string;
+  matricula?: string;
+}
+
 // Endpoints que não precisam de autenticação
 const PUBLIC_ENDPOINTS = ["/auth/suap", "/auth/refresh"];
 
@@ -43,10 +54,16 @@ async function refreshAccessToken(): Promise<string> {
   const dados = (await resposta.json()) as {
     accessToken: string;
     refreshToken: string;
+    user?: UsuarioSessao;
   };
 
   localStorage.setItem("accessToken", dados.accessToken);
   localStorage.setItem("refreshToken", dados.refreshToken);
+
+  if (dados.user) {
+    localStorage.setItem("user", JSON.stringify(dados.user));
+    window.dispatchEvent(new Event(EVENTO_USUARIO_ATUALIZADO));
+  }
 
   return dados.accessToken;
 }

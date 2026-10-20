@@ -1,9 +1,15 @@
 import type { ReactNode } from "react";
+import { cn } from "../utils/classes";
+import { EstadoVazio, EsqueletoLinhas } from "./ui/Estado";
 
 export interface Coluna<T> {
   key: string;
   titulo: string;
   render?: (item: T) => ReactNode;
+  /** Identificadores (código, matrícula, login e datas) usam a fonte mono. */
+  mono?: boolean;
+  /** Coluna de ações: na ficha do mobile ocupa a linha inteira. */
+  acoes?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -11,6 +17,7 @@ interface DataTableProps<T> {
   dados: T[];
   carregando: boolean;
   mensagemVazia?: string;
+  dicaVazia?: string;
   chaveId?: keyof T;
 }
 
@@ -19,32 +26,36 @@ export default function DataTable<T extends object>({
   dados,
   carregando,
   mensagemVazia = "Nenhum registro encontrado.",
+  dicaVazia,
   chaveId = "id" as keyof T,
 }: DataTableProps<T>) {
   if (carregando) {
     return (
-      <div className="p-8 text-center text-gray-400" role="status">
-        Carregando...
+      <div role="status">
+        <span className="sr-only">Carregando...</span>
+        <EsqueletoLinhas linhas={Math.min(Math.max(dados.length, 4), 6)} />
       </div>
     );
   }
 
   if (dados.length === 0) {
     return (
-      <div className="p-8 text-center text-gray-400">{mensagemVazia}</div>
+      <div role="status">
+        <EstadoVazio mensagem={mensagemVazia} dica={dicaVazia} />
+      </div>
     );
   }
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead className="border-b border-gray-800 bg-gray-950">
-          <tr>
+      <table className="tabela-responsiva w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-linha bg-superficie-alta/50">
             {colunas.map((coluna) => (
               <th
                 key={coluna.key}
                 scope="col"
-                className="px-6 py-4 text-left text-sm font-semibold"
+                className="px-5 py-3 text-left text-xs font-semibold text-texto-fraco"
               >
                 {coluna.titulo}
               </th>
@@ -55,10 +66,19 @@ export default function DataTable<T extends object>({
           {dados.map((item) => (
             <tr
               key={String(item[chaveId])}
-              className="border-b border-gray-800 last:border-0"
+              className="border-b border-linha/70 transition-colors last:border-0 hover:bg-superficie-ativa/50"
             >
               {colunas.map((coluna) => (
-                <td key={coluna.key} className="px-6 py-4">
+                <td
+                  key={coluna.key}
+                  data-rotulo={coluna.titulo}
+                  data-acoes={coluna.acoes ? "" : undefined}
+                  className={cn(
+                    "px-5 py-3.5 align-middle text-texto",
+                    coluna.mono &&
+                      "font-mono text-[0.8125rem] tracking-tight whitespace-nowrap text-texto-medio",
+                  )}
+                >
                   {coluna.render
                     ? coluna.render(item)
                     : String((item as Record<string, unknown>)[coluna.key] ?? "")}

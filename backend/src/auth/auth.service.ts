@@ -46,6 +46,8 @@ export class AuthService {
     adicionar(usuario.matricula);
     adicionar(usuario.identificacao);
     adicionar(usuario.vinculo?.login);
+    adicionar(usuario.email?.split('@')[0]);
+    adicionar(usuario.email_preferencial?.split('@')[0]);
     adicionar(usuario.email_academico?.split('@')[0]);
     adicionar(usuario.email_google_classroom?.split('@')[0]);
     adicionar(usuario.email_secundario?.split('@')[0]);
@@ -70,6 +72,7 @@ export class AuthService {
           admin.login,
           admin.perfil,
           'admin',
+          admin.nome,
         );
       }
 

@@ -116,7 +116,9 @@ Erro de validação (`class-validator`), HTTP 400:
 > **Solicitante escopado:** quando o autenticado é `SOLICITANTE`, ele opera apenas sobre si
 > mesmo — `POST /emprestimos` ignora o `solicitanteId` enviado (usa o próprio id) e
 > `GET /emprestimos` e `GET /emprestimos/historico` retornam somente os registros dele
-> (o filtro `solicitanteId` da query é ignorado).
+> (o filtro `solicitanteId` da query é ignorado). `GET /emprestimos/:id` e
+> `PATCH /emprestimos/:id/devolucao` de empréstimo de terceiros respondem
+> `403 SEM_PERMISSAO`.
 
 > **Atenção NestJS:** declarar `GET /emprestimos/historico` **antes** de `GET /emprestimos/:id`,
 > senão `historico` é interpretado como `:id`.
@@ -251,8 +253,9 @@ Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLIC
 }
 ```
 
-> `administrador` é quem registrou o empréstimo (extraído do JWT) — também no caso de um
-> `SOLICITANTE` registrando para si.
+> `administrador` é quem registrou o empréstimo (extraído do JWT). Quando o próprio
+> `SOLICITANTE` registra para si não há administrador associado e o campo vem `null`
+> (`id_administrador_registro` é anulável).
 
 **`POST /emprestimos`**
 
@@ -260,7 +263,8 @@ Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLIC
 { "solicitanteId": 1, "chaveId": 3, "observacoes": "Devolver até as 18h" }
 ```
 
-- `201` → empréstimo criado; `administrador` vem do JWT; `dataHoraEmprestimo` = agora (servidor);
+- `201` → empréstimo criado; `administrador` vem do JWT (`null` quando quem registra é o próprio
+  `SOLICITANTE`); `dataHoraEmprestimo` = agora (servidor);
   `chave.status` → `EMPRESTADA` na mesma transação
 - `400 VALIDACAO` · `404 NAO_ENCONTRADO` (solicitante/chave)
 - `409 CHAVE_INDISPONIVEL` (chave emprestada ou inativa)
@@ -277,7 +281,8 @@ Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLIC
 
 - `200` → empréstimo com `status = DEVOLVIDA`, `dataHoraDevolucao` = agora (servidor);
   `chave.status` → `DISPONIVEL` na mesma transação
-- `404 NAO_ENCONTRADO` · `409 EMPRESTIMO_JA_DEVOLVIDO`
+- `404 NAO_ENCONTRADO` · `403 SEM_PERMISSAO` (empréstimo de terceiros, quando `SOLICITANTE`)
+  · `409 EMPRESTIMO_JA_DEVOLVIDO`
 
 **`GET /emprestimos`** — filtros: `status` (`EMPRESTADA`/`DEVOLVIDA`), `solicitanteId`, `chaveId`, `page`, `limit`.
 Ordenação padrão: `dataHoraEmprestimo` desc.
@@ -289,7 +294,8 @@ depois os `DEVOLVIDA`; dentro de cada grupo, `dataHoraEmprestimo` desc.
 Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `dataHoraEmprestimo`),
 `solicitanteId`, `chaveId`. Para autenticado `SOLICITANTE`, retorna apenas os registros dele.
 
-**`GET /emprestimos/:id`** — detalhe · `404 NAO_ENCONTRADO`.
+**`GET /emprestimos/:id`** — detalhe · `404 NAO_ENCONTRADO` · `403 SEM_PERMISSAO`
+(empréstimo de terceiros, quando `SOLICITANTE`).
 
 ### 5.6 Administradores
 
@@ -301,6 +307,9 @@ Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `da
 
 **`GET /administradores`** (ADMIN, GESTOR) — filtros: `nome`, `login` (busca parcial), `perfil`,
 `ativo` (opcional), `page`, `limit` (default `10`). Ordenação: `nome` asc.
+
+**`GET /administradores/:id`** (ADMIN, GESTOR) — detalhe do administrador.
+- `404 NAO_ENCONTRADO` se o id não existir.
 
 **`POST /administradores`** (apenas ADMIN)
 
@@ -318,6 +327,7 @@ Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `da
 - `409 ULTIMO_ADMINISTRADOR` se a alteração deixaria o sistema sem nenhum `ADMINISTRADOR` ativo.
 
 **`DELETE /administradores/:id`** (apenas ADMIN) — `204` (soft delete, `ativo = false`).
+- `404 NAO_ENCONTRADO` se o id não existir.
 - `409 ULTIMO_ADMINISTRADOR` se for o último `ADMINISTRADOR` ativo.
 
 **`POST /administradores/:id/converter-solicitante`** (apenas ADMIN)
@@ -346,11 +356,14 @@ Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `da
 6. **Bloqueio de inativação:** chave/solicitante com empréstimo `EMPRESTADA` não pode ser inativado.
 7. **Perfis:** `ADMINISTRADOR`/`GESTOR` gerenciam chaves e solicitantes (e `ADMINISTRADOR` também
    administradores); empréstimo/devolução podem ser feitos por `ADMINISTRADOR`, `GESTOR` e
-   `SOLICITANTE` (este apenas para si mesmo).
+   `SOLICITANTE` (este apenas para si mesmo, inclusive no detalhe e na devolução —
+   `403 SEM_PERMISSAO` em registro de terceiros).
 8. **Datas coerentes:** `dataHoraDevolucao`, quando existir, nunca é anterior a `dataHoraEmprestimo`
    (constraint `CK_EMPRESTIMO_DATAS` do DER).
-9. **Solicitante escopado:** autenticado como `SOLICITANTE` cria empréstimo apenas para si e vê
-   apenas o próprio histórico (em `GET /emprestimos` e `GET /emprestimos/historico`).
+9. **Solicitante escopado:** autenticado como `SOLICITANTE` cria empréstimo apenas para si,
+   vê apenas o próprio histórico (em `GET /emprestimos` e `GET /emprestimos/historico`) e só
+   lê/devolve os próprios empréstimos (`403 SEM_PERMISSAO` em `GET /emprestimos/:id` e
+   `PATCH /emprestimos/:id/devolucao` de terceiros).
 10. **Unicidade entre entidades:** `solicitante.matricula` e `administrador.login` representam a
     mesma pessoa no SUAP — colisão em qualquer sentido (solicitante com matrícula igual a um login
     de administrador, ou administrador com login igual a uma matrícula de solicitante) é bloqueada
@@ -393,7 +406,7 @@ Códigos `409` possíveis: `MATRICULA_DUPLICADA`, `CODIGO_CHAVE_DUPLICADO`, `LOG
 | `emprestimo.id_emprestimo` | `id` |
 | `emprestimo.id_solicitante` | request: `solicitanteId` · response: `solicitante` (resumo) |
 | `emprestimo.id_chave` | request: `chaveId` · response: `chave` (resumo) |
-| `emprestimo.id_administrador_registro` | response: `administrador` (extraído do JWT) |
+| `emprestimo.id_administrador_registro` | response: `administrador` (extraído do JWT; `null` quando o próprio solicitante registra) |
 | `emprestimo.data_hora_emprestimo` | `dataHoraEmprestimo` |
 | `emprestimo.data_hora_devolucao` | `dataHoraDevolucao` |
 | `emprestimo.status` | `status` |

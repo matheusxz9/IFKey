@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { cn } from "../utils/classes";
+import { Icone } from "./ui/Icone";
 
 interface ModalProps {
   aberto: boolean;
@@ -86,7 +88,7 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      className="animate-surgir-veu fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-[2px] sm:items-center sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -97,22 +99,26 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={tituloId}
         tabIndex={-1}
-        className={`w-full ${tamanhoClasses[tamanho]} rounded-2xl border border-gray-800 bg-gray-900 p-6 shadow-2xl`}
+        className={cn(
+          "animate-surgir-dialogo flex max-h-[92vh] w-full flex-col rounded-t-2xl border border-linha bg-superficie shadow-2xl sm:rounded-2xl",
+          tamanhoClasses[tamanho],
+        )}
       >
-        <div className="mb-5 flex items-center justify-between">
-          <h2 id={tituloId} className="text-xl font-bold text-white">
+        <header className="flex items-start justify-between gap-4 border-b border-linha px-5 py-3.5">
+          <h2 id={tituloId} className="pt-1 text-base leading-tight text-texto">
             {titulo}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-2xl leading-none text-gray-500 hover:text-white cursor-pointer"
             aria-label="Fechar"
+            className="-mr-1.5 cursor-pointer rounded-lg p-2 text-texto-fraco transition-colors hover:bg-superficie-ativa hover:text-texto"
           >
-            ×
+            <Icone nome="fechar" className="h-4 w-4" />
           </button>
-        </div>
-        {children}
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
       </div>
     </div>
   );

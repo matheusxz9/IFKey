@@ -1,4 +1,6 @@
 import Modal from "./Modal";
+import { Botao } from "./ui/Botao";
+import { Icone } from "./ui/Icone";
 
 interface ConfirmDialogProps {
   aberto: boolean;
@@ -21,32 +23,34 @@ export default function ConfirmDialog({
   carregando = false,
   variante = "danger",
 }: ConfirmDialogProps) {
-  const corBotao =
-    variante === "danger"
-      ? "bg-red-600 hover:bg-red-700"
-      : "bg-yellow-700 hover:bg-yellow-800";
+  const perigo = variante === "danger";
 
   return (
     <Modal aberto={aberto} onClose={onClose} titulo={titulo} tamanho="sm">
-      <p className="text-gray-400">{mensagem}</p>
-
-      <div className="mt-6 flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={carregando}
-          className="rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+      <div className="flex gap-3.5">
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${
+            perigo
+              ? "border-vermelho/30 bg-veu-vermelho text-vermelho"
+              : "border-ambar/30 bg-veu-ambar text-ambar"
+          }`}
         >
+          <Icone nome="alerta" className="h-4.5 w-4.5" />
+        </span>
+        <p className="pt-1.5 text-sm leading-relaxed text-texto-medio">{mensagem}</p>
+      </div>
+
+      <div className="mt-6 flex flex-wrap justify-end gap-2.5">
+        <Botao variante="secundario" onClick={onClose} disabled={carregando}>
           Cancelar
-        </button>
-        <button
-          type="button"
+        </Botao>
+        <Botao
+          variante={perigo ? "perigo" : "aviso"}
           onClick={onConfirmar}
-          disabled={carregando}
-          className={`rounded-md px-4 py-2 text-sm font-semibold text-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${corBotao}`}
+          carregando={carregando}
         >
           {carregando ? "Processando..." : textoConfirmar}
-        </button>
+        </Botao>
       </div>
     </Modal>
   );

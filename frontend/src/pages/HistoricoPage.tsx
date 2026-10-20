@@ -5,6 +5,13 @@ import { useAuth } from "../contexts/AuthContext";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
+import { Alerta } from "../components/ui/Alerta";
+import { Botao } from "../components/ui/Botao";
+import { Cartao, Contagem } from "../components/ui/Cartao";
+import { Campo, Entrada } from "../components/ui/Campos";
+import { Icone } from "../components/ui/Icone";
+import { Selo } from "../components/ui/Selo";
+import { formatarDataHora, pluralizar } from "../utils/formatacao";
 
 const colunas: Coluna<Emprestimo>[] = [
   {
@@ -12,8 +19,10 @@ const colunas: Coluna<Emprestimo>[] = [
     titulo: "Chave",
     render: (e) => (
       <>
-        <p className="font-medium">{e.chave.codigo}</p>
-        <p className="text-sm text-gray-400">{e.chave.descricao}</p>
+        <p className="font-mono text-[0.8125rem] font-medium text-texto">
+          {e.chave.codigo}
+        </p>
+        <p className="mt-0.5 text-sm text-texto-fraco">{e.chave.descricao}</p>
       </>
     ),
   },
@@ -22,29 +31,36 @@ const colunas: Coluna<Emprestimo>[] = [
     titulo: "Solicitante",
     render: (e) => (
       <>
-        <p className="font-medium">{e.solicitante.nome}</p>
-        <p className="text-sm text-gray-400">{e.solicitante.matricula}</p>
+        <p className="font-medium text-texto">{e.solicitante.nome}</p>
+        <p className="mt-0.5 font-mono text-xs text-texto-fraco">
+          {e.solicitante.matricula}
+        </p>
       </>
     ),
   },
   {
     key: "dataHoraEmprestimo",
     titulo: "Empréstimo",
-    render: (e) => formatarData(e.dataHoraEmprestimo),
+    mono: true,
+    render: (e) => formatarDataHora(e.dataHoraEmprestimo),
   },
   {
     key: "dataHoraDevolucao",
     titulo: "Devolução",
-    render: (e) => (e.dataHoraDevolucao ? formatarData(e.dataHoraDevolucao) : "-"),
+    mono: true,
+    render: (e) => (e.dataHoraDevolucao ? formatarDataHora(e.dataHoraDevolucao) : "-"),
+  },
+  {
+    key: "situacao",
+    titulo: "Situação",
+    render: (e) =>
+      e.dataHoraDevolucao ? (
+        <Selo variante="devolvida">Devolvida</Selo>
+      ) : (
+        <Selo variante="andamento">Em andamento</Selo>
+      ),
   },
 ];
-
-function formatarData(data: string) {
-  return new Date(data).toLocaleString("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-}
 
 function HistoricoPage() {
   const { isSolicitante, user } = useAuth();
@@ -57,6 +73,7 @@ function HistoricoPage() {
 
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const requisicaoRef = useRef(0);
 
@@ -81,6 +98,7 @@ function HistoricoPage() {
       setEmprestimos(resposta.data);
       setPagina(resposta.meta.page);
       setTotalPaginas(resposta.meta.totalPages);
+      setTotal(resposta.meta.total);
     } catch (error) {
       if (requisicao !== requisicaoRef.current) return;
       setErro(
@@ -100,14 +118,26 @@ function HistoricoPage() {
   }, [isSolicitante, user]);
   /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
-  function pesquisar() {
-    setPagina(1);
-    const solicitanteId = isSolicitante && user?.tipo === "solicitante" ? user.id : undefined;
-    carregarHistorico(1, { de: dataInicio, ate: dataFim, solicitanteId });
+  function solicitanteIdAtual() {
+    return isSolicitante && user?.tipo === "solicitante" ? user.id : undefined;
   }
 
+  function pesquisar() {
+    setPagina(1);
+    carregarHistorico(1, { de: dataInicio, ate: dataFim, solicitanteId: solicitanteIdAtual() });
+  }
+
+  function limparPeriodo() {
+    setDataInicio("");
+    setDataFim("");
+    setPagina(1);
+    carregarHistorico(1, { de: "", ate: "", solicitanteId: solicitanteIdAtual() });
+  }
+
+  const temPeriodo = Boolean(dataInicio || dataFim);
+
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto w-full max-w-6xl">
       <PageHeader
         titulo="Histórico de empréstimos"
         subtitulo={isSolicitante
@@ -116,69 +146,77 @@ function HistoricoPage() {
       />
 
       {!isSolicitante && (
-        <section className="mb-6 rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end">
-            <div className="flex-1">
-              <label htmlFor="dataInicio" className="mb-2 block text-sm font-medium text-gray-300">
-                Data inicial
-              </label>
-              <input
+        <section className="mb-6 rounded-xl border border-linha bg-superficie p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <Campo label="Data inicial" htmlFor="dataInicio">
+              <Entrada
                 id="dataInicio"
                 type="date"
                 value={dataInicio}
                 onChange={(event) => setDataInicio(event.target.value)}
-                className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500"
+                className="lg:w-48"
               />
-            </div>
-            <div className="flex-1">
-              <label htmlFor="dataFim" className="mb-2 block text-sm font-medium text-gray-300">
-                Data final
-              </label>
-              <input
+            </Campo>
+            <Campo label="Data final" htmlFor="dataFim">
+              <Entrada
                 id="dataFim"
                 type="date"
                 value={dataFim}
                 onChange={(event) => setDataFim(event.target.value)}
-                className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500"
+                className="lg:w-48"
               />
+            </Campo>
+            <div className="flex items-center gap-2.5">
+              <Botao
+                variante="primario"
+                onClick={pesquisar}
+                icone={<Icone nome="buscar" />}
+                className="flex-1 lg:flex-none"
+              >
+                Pesquisar
+              </Botao>
+              {temPeriodo && (
+                <Botao variante="sutil" onClick={limparPeriodo}>
+                  Limpar
+                </Botao>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={pesquisar}
-              className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer"
-            >
-              Pesquisar
-            </button>
           </div>
         </section>
       )}
 
-      {erro && (
-        <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400" role="alert">
-          {erro}
-        </div>
-      )}
+      {erro && <Alerta className="mb-6">{erro}</Alerta>}
 
-      <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
+      <Cartao
+        semRecuo
+        acao={
+          <Contagem>
+            {pluralizar(total, "empréstimo encontrado", "empréstimos encontrados")}
+          </Contagem>
+        }
+      >
         <DataTable
           colunas={colunas}
           dados={emprestimos}
           carregando={carregando}
           mensagemVazia="Nenhum empréstimo encontrado."
+          dicaVazia={
+            isSolicitante
+              ? "Você ainda não registrou empréstimos."
+              : "Ajuste o período pesquisado para ver outros registros."
+          }
         />
         <Pagination
           paginaAtual={pagina}
           totalPaginas={totalPaginas}
           onAnterior={() => {
-            const solicitanteId = isSolicitante && user?.tipo === "solicitante" ? user.id : undefined;
-            carregarHistorico(pagina - 1, { de: dataInicio, ate: dataFim, solicitanteId });
+            carregarHistorico(pagina - 1, { de: dataInicio, ate: dataFim, solicitanteId: solicitanteIdAtual() });
           }}
           onProxima={() => {
-            const solicitanteId = isSolicitante && user?.tipo === "solicitante" ? user.id : undefined;
-            carregarHistorico(pagina + 1, { de: dataInicio, ate: dataFim, solicitanteId });
+            carregarHistorico(pagina + 1, { de: dataInicio, ate: dataFim, solicitanteId: solicitanteIdAtual() });
           }}
         />
-      </section>
+      </Cartao>
     </div>
   );
 }

@@ -18,6 +18,7 @@ export interface UsuarioSuap {
   email_academico?: string;
   email_google_classroom?: string;
   email_secundario?: string;
+  email_preferencial?: string;
   campus?: string;
   tipo_usuario?: string;
   tipo_vinculo?: string;

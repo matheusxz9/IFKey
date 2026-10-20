@@ -10,7 +10,7 @@ import {
   inativarChave,
   inativarSolicitante,
 } from "../fixtures/api";
-import { caminhoApi, caminhoStorageState } from "../fixtures/sessao";
+import { caminhoApi, caminhoStorageState, lerUsuarios } from "../fixtures/sessao";
 
 /**
  * P0 — Fluxo de empréstimo/devolução de chaves.
@@ -276,11 +276,7 @@ test("filtra a lista de chaves por status", async ({ page }) => {
     await expect(tabelaDeChaves(page).getByText(codigoDisponivel)).toBeVisible();
     await expect(tabelaDeChaves(page).getByText(codigoEmprestada)).toHaveCount(0);
   } finally {
-    try {
-      await devolverEmprestimo(api, emprestimo.id);
-    } catch {
-      // BUG: a devolução retorna 500 (ver teste "devolve a chave").
-    }
+    await devolverEmprestimo(api, emprestimo.id);
     await inativarChave(api, chaveDisponivel.id);
     await inativarChave(api, chaveEmprestada.id);
     await inativarSolicitante(api, solicitante.id);
@@ -328,4 +324,63 @@ test("navega entre as páginas da lista de chaves", async ({ page }) => {
     }
     await api.dispose();
   }
+});
+
+/**
+ * Regressão (bug P0): o empréstimo registrado pelo próprio SOLICITANTE falhava com 500
+ * (o id do solicitante era gravado como administrador) e a devolução de terceiros
+ * passava pela API. Cobre o registro para si e a devolução do próprio empréstimo.
+ */
+test.describe("como solicitante", () => {
+  test.use({ storageState: caminhoStorageState("solicitante") });
+
+  test("registra empréstimo para si e devolve a chave pelo fluxo completo", async ({
+    page,
+  }) => {
+    const api = await apiDe("admin");
+    const codigo = codigoChave("SOLIC");
+    await criarChave(api, { codigo });
+    const solicitante = lerUsuarios().solicitante;
+
+    try {
+      await page.goto("/chaves");
+      await page.getByLabel("Buscar chaves por código ou descrição").fill(codigo);
+      await page.getByRole("button", { name: "Buscar", exact: true }).click();
+      await expect(tabelaDeChaves(page).getByText(codigo)).toBeVisible();
+      await tabelaDeChaves(page)
+        .getByRole("button", { name: `Emprestar chave ${codigo}` })
+        .click();
+
+      const dialogo = page.getByRole("dialog", { name: "Registrar empréstimo" });
+      await expect(dialogo.getByText(solicitante.nome)).toBeVisible();
+      await expect(
+        dialogo.getByText(`Matrícula: ${solicitante.matricula}`),
+      ).toBeVisible();
+      await dialogo.getByRole("button", { name: "Confirmar empréstimo" }).click();
+
+      await expect(page.getByText("Empréstimo registrado com sucesso!")).toBeVisible();
+      await expect(
+        page.getByRole("dialog", { name: "Registrar empréstimo" }),
+      ).toHaveCount(0);
+
+      const ativos = secaoEmprestimosAtivos(page);
+      await expect(ativos.getByText(codigo)).toBeVisible();
+      await expect(
+        ativos.getByRole("row").filter({ hasText: codigo }).getByText(solicitante.nome),
+      ).toBeVisible();
+
+      await ativos.getByRole("button", { name: `Devolver chave ${codigo}` }).click();
+      const confirmacao = page.getByRole("dialog", { name: "Confirmar devolução" });
+      await expect(
+        confirmacao.getByText(`Deseja devolver a chave ${codigo}?`),
+      ).toBeVisible();
+      await confirmacao.getByRole("button", { name: "Confirmar devolução" }).click();
+
+      await expect(page.getByText("Devolução registrada com sucesso!")).toBeVisible();
+      await expect(ativos.getByText(codigo)).toHaveCount(0);
+    } finally {
+      await encerrarChave(api, codigo);
+      await api.dispose();
+    }
+  });
 });

@@ -1,3 +1,6 @@
+import { Botao } from "./ui/Botao";
+import { Icone } from "./ui/Icone";
+
 interface PaginationProps {
   paginaAtual: number;
   totalPaginas: number;
@@ -14,28 +17,30 @@ export default function Pagination({
   if (totalPaginas <= 1) return null;
 
   return (
-    <div className="flex items-center justify-between border-t border-gray-800 px-6 py-4">
-      <button
-        type="button"
+    <div className="flex items-center justify-between gap-4 border-t border-linha px-5 py-3">
+      <Botao
+        tamanho="sm"
+        variante="secundario"
         onClick={onAnterior}
         disabled={paginaAtual === 1}
-        className="rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+        icone={<Icone nome="anterior" className="h-3.5 w-3.5" />}
       >
         Anterior
-      </button>
+      </Botao>
 
-      <span className="text-sm text-gray-400">
+      <span className="text-sm text-texto-fraco">
         Página {paginaAtual} de {totalPaginas}
       </span>
 
-      <button
-        type="button"
+      <Botao
+        tamanho="sm"
+        variante="secundario"
         onClick={onProxima}
         disabled={paginaAtual === totalPaginas}
-        className="rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+        icone={<Icone nome="proximo" className="order-last h-3.5 w-3.5" />}
       >
         Próxima
-      </button>
+      </Botao>
     </div>
   );
 }

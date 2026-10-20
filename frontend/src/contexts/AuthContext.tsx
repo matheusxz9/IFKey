@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { EVENTO_USUARIO_ATUALIZADO } from "../services/api";
 
 export type Perfil = "ADMINISTRADOR" | "GESTOR" | "SOLICITANTE";
 
@@ -125,6 +126,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => controller.abort();
   }, [token, user, logout]);
+
+  useEffect(() => {
+    const sincronizarSessao = () => {
+      setUser(parseUserFromStorage());
+      setToken(localStorage.getItem("accessToken"));
+    };
+    window.addEventListener(EVENTO_USUARIO_ATUALIZADO, sincronizarSessao);
+    return () =>
+      window.removeEventListener(EVENTO_USUARIO_ATUALIZADO, sincronizarSessao);
+  }, []);
 
   const roleHelpers = getRoleHelpers(user);
 

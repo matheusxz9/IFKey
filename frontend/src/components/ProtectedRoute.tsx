@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { TelaCarregando } from "./ui/Estado";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -13,14 +14,7 @@ export default function ProtectedRoute({
   const { isAuthenticated, user, carregando } = useAuth();
 
   if (carregando) {
-    return (
-      <main
-        className="flex min-h-screen items-center justify-center bg-gray-950 text-gray-400"
-        role="status"
-      >
-        Verificando sessão...
-      </main>
-    );
+    return <TelaCarregando mensagem="Verificando sessão..." />;
   }
 
   if (!isAuthenticated) {

@@ -16,6 +16,13 @@ import Modal from "../components/Modal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
+import { Alerta } from "../components/ui/Alerta";
+import { Botao } from "../components/ui/Botao";
+import { Cartao, Contagem } from "../components/ui/Cartao";
+import { AreaTexto, Campo, Entrada, EntradaBusca, Selecao } from "../components/ui/Campos";
+import { Icone } from "../components/ui/Icone";
+import { Selo } from "../components/ui/Selo";
+import { formatarTipo, pluralizar } from "../utils/formatacao";
 
 type FiltrosChaves = { busca: string; status: StatusChave | "" };
 
@@ -31,6 +38,7 @@ function ChavesPage() {
 
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const [chaveSelecionada, setChaveSelecionada] = useState<Chave | null>(null);
   const [matricula, setMatricula] = useState("");
@@ -73,6 +81,7 @@ function ChavesPage() {
       setChaves(resposta.data);
       setPagina(resposta.meta.page);
       setTotalPaginas(resposta.meta.totalPages);
+      setTotal(resposta.meta.total);
     } catch (error) {
       if (controller.signal.aborted) return;
       setErro(error instanceof Error ? error.message : "Erro ao carregar as chaves.");
@@ -118,6 +127,13 @@ function ChavesPage() {
   function buscar() {
     setPagina(1);
     carregarChaves(1);
+  }
+
+  function limparFiltros() {
+    setBusca("");
+    setStatus("");
+    setPagina(1);
+    carregarChaves(1, { busca: "", status: "" });
   }
 
   function abrirModalEmprestimo(chave: Chave) {
@@ -220,36 +236,52 @@ function ChavesPage() {
     }
   }
 
+  const temFiltros = Boolean(busca || status);
+
   const colunasChaves: Coluna<Chave>[] = [
-    { key: "codigo", titulo: "Código" },
+    { key: "codigo", titulo: "Código", mono: true },
     { key: "descricao", titulo: "Descrição" },
+    {
+      key: "localizacao",
+      titulo: "Localização",
+      render: (c) => <span className="text-texto-medio">{c.localizacao}</span>,
+    },
     {
       key: "status",
       titulo: "Status",
       render: (c) => (
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-          c.status === "DISPONIVEL" ? "bg-green-900 text-green-300" : "bg-yellow-900 text-yellow-300"
-        }`}>
+        <Selo variante={c.status === "DISPONIVEL" ? "disponivel" : "emprestada"}>
           {c.status === "DISPONIVEL" ? "Disponível" : "Emprestada"}
-        </span>
+        </Selo>
       ),
     },
     {
       key: "acao",
       titulo: "Ação",
+      acoes: true,
       render: (c) => {
         const emprestimoDaChave = emprestimos.find((e) => e.chave.id === c.id);
         return c.status === "DISPONIVEL" ? (
-          <button type="button" aria-label={`Emprestar chave ${c.codigo}`} onClick={() => abrirModalEmprestimo(c)}
-            className="rounded-md bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 cursor-pointer">
+          <Botao
+            tamanho="sm"
+            variante="primario"
+            aria-label={`Emprestar chave ${c.codigo}`}
+            onClick={() => abrirModalEmprestimo(c)}
+          >
             Emprestar
-          </button>
+          </Botao>
         ) : (
-          <button type="button" aria-label={`Devolver chave ${c.codigo}`} onClick={() => { if (emprestimoDaChave) setEmprestimoSelecionado(emprestimoDaChave); }}
+          <Botao
+            tamanho="sm"
+            variante="secundario"
+            aria-label={`Devolver chave ${c.codigo}`}
+            onClick={() => {
+              if (emprestimoDaChave) setEmprestimoSelecionado(emprestimoDaChave);
+            }}
             disabled={!emprestimoDaChave}
-            className="rounded-md bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">
+          >
             Devolver
-          </button>
+          </Botao>
         );
       },
     },
@@ -261,84 +293,134 @@ function ChavesPage() {
       titulo: "Chave",
       render: (e) => (
         <>
-          <p className="font-medium">{e.chave.codigo}</p>
-          <p className="text-sm text-gray-400">{e.chave.descricao}</p>
+          <p className="font-mono text-[0.8125rem] font-medium text-texto">
+            {e.chave.codigo}
+          </p>
+          <p className="mt-0.5 text-sm text-texto-fraco">{e.chave.descricao}</p>
         </>
       ),
     },
     { key: "solicitante", titulo: "Solicitante", render: (e) => e.solicitante.nome },
-    { key: "matricula", titulo: "Matrícula", render: (e) => e.solicitante.matricula },
+    { key: "matricula", titulo: "Matrícula", mono: true, render: (e) => e.solicitante.matricula },
     {
       key: "devolver",
       titulo: "Ação",
+      acoes: true,
       render: (e) => (
-        <button type="button" aria-label={`Devolver chave ${e.chave.codigo}`} onClick={() => setEmprestimoSelecionado(e)}
-          className="rounded-md bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 cursor-pointer">
+        <Botao
+          tamanho="sm"
+          variante="secundario"
+          aria-label={`Devolver chave ${e.chave.codigo}`}
+          onClick={() => setEmprestimoSelecionado(e)}
+        >
           Devolver
-        </button>
+        </Botao>
       ),
     },
   ];
 
   return (
     <>
-      <div className="mx-auto max-w-6xl">
-        <PageHeader titulo="Chaves" subtitulo="Gerenciamento das chaves das salas e laboratórios." />
+      <div className="mx-auto w-full max-w-6xl">
+        <PageHeader
+          titulo="Chaves"
+          subtitulo="Gerenciamento das chaves das salas e laboratórios."
+        />
 
-        <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-800 bg-gray-900 p-5 md:flex-row">
-          <input type="text" placeholder="Buscar por código ou descrição..." value={busca}
-            aria-label="Buscar chaves por código ou descrição"
-            onChange={(e) => setBusca(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") buscar(); }}
-            className="flex-1 rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-          <select value={status} aria-label="Filtrar por status"
-            onChange={(e) => {
-              const novoStatus = e.target.value as StatusChave | "";
-              setStatus(novoStatus);
-              setPagina(1);
-              void carregarChaves(1, { busca, status: novoStatus });
-            }}
-            className="rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
-            <option value="">Todos os status</option>
-            <option value="DISPONIVEL">Disponível</option>
-            <option value="EMPRESTADA">Emprestada</option>
-          </select>
-          <button type="button" onClick={buscar}
-            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer">
-            Buscar
-          </button>
-        </section>
-
-        {erro && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400" role="alert">{erro}</div>
-        )}
-
-        <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
-          <DataTable colunas={colunasChaves} dados={chaves}
-            carregando={carregando} mensagemVazia="Nenhuma chave encontrada." />
-
-          <Pagination paginaAtual={pagina} totalPaginas={totalPaginas}
-            onAnterior={() => carregarChaves(pagina - 1)} onProxima={() => carregarChaves(pagina + 1)} />
-        </section>
-
-        <section className="mt-8 overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
-          <div className="border-b border-gray-800 px-6 py-5">
-            <h2 className="text-xl font-bold">Empréstimos ativos</h2>
-            <p className="mt-1 text-sm text-gray-400">Chaves que estão atualmente emprestadas.</p>
+        <section className="mb-6 rounded-xl border border-linha bg-superficie p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <EntradaBusca
+              rotulo="Buscar chaves por código ou descrição"
+              placeholder="Buscar por código ou descrição..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") buscar();
+              }}
+            />
+            <Selecao
+              value={status}
+              aria-label="Filtrar por status"
+              onChange={(e) => {
+                const novoStatus = e.target.value as StatusChave | "";
+                setStatus(novoStatus);
+                setPagina(1);
+                void carregarChaves(1, { busca, status: novoStatus });
+              }}
+              className="lg:w-52"
+            >
+              <option value="">Todos os status</option>
+              <option value="DISPONIVEL">Disponível</option>
+              <option value="EMPRESTADA">Emprestada</option>
+            </Selecao>
+            <div className="flex items-center gap-2.5">
+              <Botao
+                variante="primario"
+                onClick={buscar}
+                icone={<Icone nome="buscar" />}
+                className="flex-1 lg:flex-none"
+              >
+                Buscar
+              </Botao>
+              {temFiltros && (
+                <Botao variante="sutil" onClick={limparFiltros}>
+                  Limpar
+                </Botao>
+              )}
+            </div>
           </div>
+        </section>
+
+        {erro && <Alerta className="mb-6">{erro}</Alerta>}
+
+        <Cartao
+          className="mb-6"
+          semRecuo
+          acao={<Contagem>{pluralizar(total, "chave encontrada", "chaves encontradas")}</Contagem>}
+        >
+          <DataTable
+            colunas={colunasChaves}
+            dados={chaves}
+            carregando={carregando}
+            mensagemVazia="Nenhuma chave encontrada."
+            dicaVazia="Ajuste a busca e os filtros ou verifique o cadastro das chaves."
+          />
+
+          <Pagination
+            paginaAtual={pagina}
+            totalPaginas={totalPaginas}
+            onAnterior={() => carregarChaves(pagina - 1)}
+            onProxima={() => carregarChaves(pagina + 1)}
+          />
+        </Cartao>
+
+        <Cartao
+          semRecuo
+          titulo="Empréstimos ativos"
+          subtitulo="Chaves que estão atualmente emprestadas."
+          acao={<Contagem>{pluralizar(emprestimos.length, "empréstimo", "empréstimos")}</Contagem>}
+        >
           {erroEmprestimos && (
-            <div className="border-b border-gray-800 px-6 py-4 text-sm text-red-400" role="alert">
-              {erroEmprestimos}
+            <div className="border-b border-linha p-4">
+              <Alerta>{erroEmprestimos}</Alerta>
             </div>
           )}
-          <DataTable colunas={colunasEmprestimos} dados={emprestimos}
-            carregando={carregandoEmprestimos} mensagemVazia="Nenhuma chave emprestada no momento." />
-        </section>
+
+          <DataTable
+            colunas={colunasEmprestimos}
+            dados={emprestimos}
+            carregando={carregandoEmprestimos}
+            mensagemVazia="Nenhuma chave emprestada no momento."
+            dicaVazia="Todas as chaves estão disponíveis."
+          />
+        </Cartao>
       </div>
 
       <ConfirmDialog
         aberto={!!emprestimoSelecionado}
-        onClose={() => { if (!devolvendo) setEmprestimoSelecionado(null); }}
+        onClose={() => {
+          if (!devolvendo) setEmprestimoSelecionado(null);
+        }}
         onConfirmar={confirmarDevolucao}
         titulo="Confirmar devolução"
         mensagem={`Deseja devolver a chave ${emprestimoSelecionado?.chave.codigo}?`}
@@ -347,60 +429,106 @@ function ChavesPage() {
         variante="warning"
       />
 
-      <Modal aberto={!!chaveSelecionada} onClose={fecharModalEmprestimo} titulo="Registrar empréstimo">
-        <div className="mb-6 rounded-lg border border-gray-700 bg-gray-950 p-4">
-          <p className="text-sm text-gray-400">Chave selecionada</p>
-          <p className="mt-1 font-semibold">{chaveSelecionada?.codigo}</p>
-          <p className="text-sm text-gray-400">{chaveSelecionada?.descricao}</p>
-        </div>
-        {isSolicitante ? (
-          <div className="mb-6 rounded-lg border border-gray-700 bg-gray-950 p-4">
-            <p className="text-sm text-gray-400">Solicitante</p>
-            <p className="mt-1 text-sm text-gray-300">
-              O empréstimo será registrado para você mesmo.
+      <Modal
+        aberto={!!chaveSelecionada}
+        onClose={fecharModalEmprestimo}
+        titulo="Registrar empréstimo"
+      >
+        <div className="space-y-5">
+          <div className="rounded-lg border border-linha bg-superficie-alta px-4 py-3">
+            <p className="text-xs text-texto-fraco">Chave selecionada</p>
+            <p className="mt-1 font-mono text-[0.8125rem] font-medium text-texto">
+              {chaveSelecionada?.codigo}
+            </p>
+            <p className="text-sm text-texto-medio">{chaveSelecionada?.descricao}</p>
+            <p className="mt-1 text-xs text-texto-fraco">
+              {chaveSelecionada?.localizacao}
             </p>
           </div>
-        ) : (
-          <div className="mb-6">
-            <label htmlFor="matricula" className="mb-2 block text-sm font-medium">Matrícula do solicitante</label>
-            <div className="flex gap-3">
-              <input id="matricula" type="text" value={matricula} onChange={(e) => setMatricula(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") buscarSolicitante(); }}
-                placeholder="Digite a matrícula"
-                className="min-w-0 flex-1 rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-              <button type="button" onClick={buscarSolicitante} disabled={buscandoSolicitante}
-                className="rounded-md bg-green-700 px-4 py-3 font-semibold hover:bg-green-800 disabled:opacity-50 cursor-pointer">
-                {buscandoSolicitante ? "Buscando..." : "Buscar"}
-              </button>
+
+          {isSolicitante ? (
+            <div className="rounded-lg border border-verde/25 bg-veu-verde px-4 py-3">
+              <p className="text-xs text-texto-fraco">Solicitante</p>
+              {solicitante ? (
+                <>
+                  <p className="mt-1 font-medium text-texto">{solicitante.nome}</p>
+                  <p className="text-sm text-texto-medio">
+                    Matrícula: {solicitante.matricula}
+                  </p>
+                  <p className="text-sm text-texto-medio">
+                    Tipo: {formatarTipo(solicitante.tipo)}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-texto-medio">
+                  O empréstimo será registrado para você mesmo.
+                </p>
+              )}
             </div>
+          ) : (
+            <Campo label="Matrícula do solicitante" htmlFor="matricula">
+              <div className="flex gap-2.5">
+                <Entrada
+                  id="matricula"
+                  type="text"
+                  value={matricula}
+                  onChange={(e) => setMatricula(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") buscarSolicitante();
+                  }}
+                  placeholder="Digite a matrícula"
+                  className="min-w-0 flex-1"
+                />
+                <Botao
+                  variante="secundario"
+                  onClick={buscarSolicitante}
+                  carregando={buscandoSolicitante}
+                >
+                  {buscandoSolicitante ? "Buscando..." : "Buscar"}
+                </Botao>
+              </div>
+            </Campo>
+          )}
+
+          {solicitante && !isSolicitante && (
+            <div className="rounded-lg border border-verde/25 bg-veu-verde px-4 py-3">
+              <p className="text-xs text-texto-fraco">Solicitante</p>
+              <p className="mt-1 font-medium text-texto">{solicitante.nome}</p>
+              <p className="text-sm text-texto-medio">
+                Matrícula: {solicitante.matricula}
+              </p>
+              <p className="text-sm text-texto-medio">Tipo: {formatarTipo(solicitante.tipo)}</p>
+            </div>
+          )}
+
+          <Campo label="Observações" htmlFor="observacoes" dica="Opcional.">
+            <AreaTexto
+              id="observacoes"
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              placeholder="Observações sobre o empréstimo (opcional)"
+              rows={3}
+            />
+          </Campo>
+
+          {erroModal && <Alerta>{erroModal}</Alerta>}
+
+          <div className="flex flex-wrap justify-end gap-2.5 pt-0.5">
+            <Botao
+              variante="secundario"
+              onClick={fecharModalEmprestimo}
+              disabled={salvandoEmprestimo}
+            >
+              Cancelar
+            </Botao>
+            <Botao
+              variante="primario"
+              onClick={confirmarEmprestimo}
+              disabled={salvandoEmprestimo || !solicitante}
+            >
+              {salvandoEmprestimo ? "Registrando..." : "Confirmar empréstimo"}
+            </Botao>
           </div>
-        )}
-        {solicitante && (
-          <div className="mb-6 rounded-lg border border-green-800 bg-green-950/30 p-4">
-            <p className="text-sm text-gray-400">Solicitante</p>
-            <p className="mt-1 font-semibold">{solicitante.nome}</p>
-            <p className="text-sm text-gray-400">Matrícula: {solicitante.matricula}</p>
-            <p className="text-sm text-gray-400">Tipo: {solicitante.tipo}</p>
-          </div>
-        )}
-        <div className="mb-6">
-          <label htmlFor="observacoes" className="mb-2 block text-sm font-medium">Observações</label>
-          <textarea id="observacoes" value={observacoes} onChange={(e) => setObservacoes(e.target.value)}
-            placeholder="Observações sobre o empréstimo (opcional)" rows={3}
-            className="w-full resize-none rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-        </div>
-        {erroModal && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-400" role="alert">{erroModal}</div>
-        )}
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={fecharModalEmprestimo} disabled={salvandoEmprestimo}
-            className="rounded-md border border-gray-700 px-5 py-3 font-semibold text-gray-300 hover:bg-gray-800 disabled:opacity-40 cursor-pointer">
-            Cancelar
-          </button>
-          <button type="button" onClick={confirmarEmprestimo} disabled={salvandoEmprestimo || !solicitante}
-            className="rounded-md bg-green-700 px-5 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40">
-            {salvandoEmprestimo ? "Registrando..." : "Confirmar empréstimo"}
-          </button>
         </div>
       </Modal>
     </>

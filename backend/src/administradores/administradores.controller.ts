@@ -57,7 +57,6 @@ export class AdministradoresController {
     return this.administradoresService.converterEmSolicitante(id, dto);
   }
 
-
   @Patch(':id')
   @Roles(PerfilAdministrador.ADMINISTRADOR)
   atualizar(

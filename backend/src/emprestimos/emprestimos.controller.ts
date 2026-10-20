@@ -49,8 +49,9 @@ export class EmprestimosController {
   devolver(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: DevolverEmprestimoDto,
+    @CurrentUser() user: { id: number; perfil: string },
   ) {
-    return this.emprestimosService.devolver(id, dto);
+    return this.emprestimosService.devolver(id, dto, user);
   }
 
   @Get()
@@ -85,7 +86,10 @@ export class EmprestimosController {
     PerfilAdministrador.GESTOR,
     PerfilAdministrador.SOLICITANTE,
   )
-  buscar(@Param('id', ParseIntPipe) id: number) {
-    return this.emprestimosService.buscar(id);
+  buscar(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: { id: number; perfil: string },
+  ) {
+    return this.emprestimosService.buscar(id, user);
   }
 }

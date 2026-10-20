@@ -52,7 +52,7 @@ export class AdministradoresService {
   async buscar(id: number) {
     const admin = await this.repo.findOne({ where: { id } });
     if (!admin) {
-      return null;
+      throw new NaoEncontradoException('Administrador não encontrado.');
     }
     return admin;
   }
@@ -121,7 +121,6 @@ export class AdministradoresService {
 
   async inativar(id: number) {
     const admin = await this.buscar(id);
-    if (!admin) return;
     if (
       (admin.perfil as PerfilAdministrador) ===
         PerfilAdministrador.ADMINISTRADOR &&

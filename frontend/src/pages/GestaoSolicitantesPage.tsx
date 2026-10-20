@@ -12,17 +12,21 @@ import Modal from "../components/Modal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
+import { Alerta } from "../components/ui/Alerta";
+import { Botao } from "../components/ui/Botao";
+import { Cartao, Contagem } from "../components/ui/Cartao";
+import { Campo, Entrada, EntradaBusca, Selecao } from "../components/ui/Campos";
+import { Icone } from "../components/ui/Icone";
+import { Selo, type VarianteSelo } from "../components/ui/Selo";
+import { formatarTipo, pluralizar } from "../utils/formatacao";
 
 type ModalTipo = "cadastro" | "edicao" | null;
 
-function formatarTipo(tipo: TipoSolicitante) {
-  switch (tipo) {
-    case "ALUNO": return "Aluno";
-    case "PROFESSOR": return "Professor";
-    case "SERVIDOR": return "Servidor";
-    default: return tipo;
-  }
-}
+const varianteTipo: Record<TipoSolicitante, VarianteSelo> = {
+  ALUNO: "aluno",
+  PROFESSOR: "professor",
+  SERVIDOR: "servidor",
+};
 
 function GestaoSolicitantesPage() {
   const toast = useToast();
@@ -37,6 +41,7 @@ function GestaoSolicitantesPage() {
 
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
   const [solicitanteEmEdicao, setSolicitanteEmEdicao] = useState<Solicitante | null>(null);
@@ -80,6 +85,7 @@ function GestaoSolicitantesPage() {
       setSolicitantes(resposta.data);
       setPagina(resposta.meta.page);
       setTotalPaginas(resposta.meta.totalPages);
+      setTotal(resposta.meta.total);
     } catch (error) {
       if (requisicao !== requisicaoRef.current) return;
       setErro(error instanceof Error ? error.message : "Erro ao carregar os solicitantes.");
@@ -97,6 +103,15 @@ function GestaoSolicitantesPage() {
   function buscar() {
     setPagina(1);
     carregarSolicitantes(1);
+  }
+
+  function limparFiltros() {
+    setBuscaNome("");
+    setBuscaMatricula("");
+    setTipo("");
+    setAtivo("");
+    setPagina(1);
+    carregarSolicitantes(1, { nome: "", matricula: "", tipo: "", ativo: "" });
   }
 
   function abrirModalCadastro() {
@@ -190,57 +205,67 @@ function GestaoSolicitantesPage() {
     }
   }
 
+  const temFiltros = Boolean(
+    buscaNome || buscaMatricula || tipo || ativo !== "",
+  );
+
   const colunas: Coluna<Solicitante>[] = [
     { key: "nome", titulo: "Nome" },
     {
       key: "tipo",
       titulo: "Tipo",
       render: (s) => (
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-          s.tipo === "ALUNO" ? "bg-blue-900 text-blue-300"
-          : s.tipo === "PROFESSOR" ? "bg-purple-900 text-purple-300"
-          : "bg-orange-900 text-orange-300"
-        }`}>
-          {formatarTipo(s.tipo)}
-        </span>
+        <Selo variante={varianteTipo[s.tipo] ?? "aluno"}>{formatarTipo(s.tipo)}</Selo>
       ),
     },
-    { key: "matricula", titulo: "Matrícula" },
-    { key: "contato", titulo: "Contato" },
+    { key: "matricula", titulo: "Matrícula", mono: true },
+    {
+      key: "contato",
+      titulo: "Contato",
+      render: (s) => <span className="text-texto-medio">{s.contato}</span>,
+    },
     {
       key: "ativo",
       titulo: "Ativo",
       render: (s) => (
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-          s.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-300"
-        }`}>
+        <Selo variante={s.ativo ? "ativo" : "inativo"}>
           {s.ativo ? "Ativo" : "Inativo"}
-        </span>
+        </Selo>
       ),
     },
     {
       key: "acoes",
       titulo: "Ações",
+      acoes: true,
       render: (s) => (
-        <div className="flex gap-2">
-          <button type="button" aria-label={`Editar solicitante ${s.nome}`}
+        <div className="flex flex-wrap gap-1">
+          <Botao
+            tamanho="sm"
+            variante="sutil"
+            aria-label={`Editar solicitante ${s.nome}`}
             onClick={() => abrirModalEdicao(s)}
-            className="rounded-md border border-gray-700 px-3 py-1 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer">
+          >
             Editar
-          </button>
-          {s.ativo && (
-            <button type="button" aria-label={`Inativar solicitante ${s.nome}`}
+          </Botao>
+          {s.ativo ? (
+            <Botao
+              tamanho="sm"
+              variante="sutil-perigo"
+              aria-label={`Inativar solicitante ${s.nome}`}
               onClick={() => setSolicitanteParaInativar(s)}
-              className="rounded-md border border-red-800 px-3 py-1 text-sm font-medium text-red-400 hover:bg-red-950/40 cursor-pointer">
+            >
               Inativar
-            </button>
-          )}
-          {!s.ativo && (
-            <button type="button" aria-label={`Reativar solicitante ${s.nome}`}
-              onClick={() => executarReativacao(s)} disabled={reativando}
-              className="rounded-md border border-green-800 px-3 py-1 text-sm font-medium text-green-400 hover:bg-green-950/40 disabled:opacity-40 cursor-pointer">
+            </Botao>
+          ) : (
+            <Botao
+              tamanho="sm"
+              variante="sutil-verde"
+              aria-label={`Reativar solicitante ${s.nome}`}
+              onClick={() => executarReativacao(s)}
+              disabled={reativando}
+            >
               Reativar
-            </button>
+            </Botao>
           )}
         </div>
       ),
@@ -249,118 +274,184 @@ function GestaoSolicitantesPage() {
 
   return (
     <>
-      <div className="mx-auto max-w-6xl">
-        <PageHeader titulo="Gestão de solicitantes" subtitulo="Cadastre, edite e gerencie os solicitantes de chaves.">
-          <button type="button" onClick={abrirModalCadastro}
-            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer">
+      <div className="mx-auto w-full max-w-6xl">
+        <PageHeader
+          titulo="Gestão de solicitantes"
+          subtitulo="Cadastre, edite e gerencie os solicitantes de chaves."
+        >
+          <Botao
+            variante="primario"
+            onClick={abrirModalCadastro}
+            icone={<Icone nome="mais" />}
+          >
             Novo solicitante
-          </button>
+          </Botao>
         </PageHeader>
 
-        <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-800 bg-gray-900 p-5 md:flex-row">
-          <input type="text" placeholder="Buscar por nome..." aria-label="Buscar solicitantes por nome"
-            value={buscaNome}
-            onChange={(e) => setBuscaNome(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") buscar(); }}
-            className="flex-1 rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-          <input type="text" placeholder="Buscar por matrícula..." aria-label="Buscar solicitantes por matrícula"
-            value={buscaMatricula}
-            onChange={(e) => setBuscaMatricula(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") buscar(); }}
-            className="flex-1 rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-          <select value={tipo} aria-label="Filtrar por tipo de solicitante"
-            onChange={(e) => {
-              const novoTipo = e.target.value as TipoSolicitante | "";
-              setTipo(novoTipo);
-              setPagina(1);
-              void carregarSolicitantes(1, { nome: buscaNome, matricula: buscaMatricula, tipo: novoTipo, ativo });
-            }}
-            className="rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
-            <option value="">Todos os tipos</option>
-            <option value="ALUNO">Aluno</option>
-            <option value="PROFESSOR">Professor</option>
-            <option value="SERVIDOR">Servidor</option>
-          </select>
-          <select value={ativo === "" ? "" : String(ativo)} aria-label="Filtrar por situação do cadastro"
-            onChange={(e) => {
-              const valor = e.target.value;
-              const novoAtivo = valor === "" ? "" : valor === "true";
-              setAtivo(novoAtivo);
-              setPagina(1);
-              void carregarSolicitantes(1, { nome: buscaNome, matricula: buscaMatricula, tipo, ativo: novoAtivo });
-            }}
-            className="rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
-            <option value="">Todos</option>
-            <option value="true">Ativos</option>
-            <option value="false">Inativos</option>
-          </select>
-          <button type="button" onClick={buscar}
-            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer">
-            Buscar
-          </button>
+        <section className="mb-6 rounded-xl border border-linha bg-superficie p-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <EntradaBusca
+              rotulo="Buscar solicitantes por nome"
+              placeholder="Buscar por nome..."
+              value={buscaNome}
+              onChange={(e) => setBuscaNome(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") buscar();
+              }}
+            />
+            <EntradaBusca
+              rotulo="Buscar solicitantes por matrícula"
+              placeholder="Buscar por matrícula..."
+              value={buscaMatricula}
+              onChange={(e) => setBuscaMatricula(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") buscar();
+              }}
+              classNameWrapper="xl:max-w-xs"
+            />
+            <Selecao
+              value={tipo}
+              aria-label="Filtrar por tipo de solicitante"
+              onChange={(e) => {
+                const novoTipo = e.target.value as TipoSolicitante | "";
+                setTipo(novoTipo);
+                setPagina(1);
+                void carregarSolicitantes(1, { nome: buscaNome, matricula: buscaMatricula, tipo: novoTipo, ativo });
+              }}
+              className="xl:w-44"
+            >
+              <option value="">Todos os tipos</option>
+              <option value="ALUNO">Aluno</option>
+              <option value="PROFESSOR">Professor</option>
+              <option value="SERVIDOR">Servidor</option>
+            </Selecao>
+            <Selecao
+              value={ativo === "" ? "" : String(ativo)}
+              aria-label="Filtrar por situação do cadastro"
+              onChange={(e) => {
+                const valor = e.target.value;
+                const novoAtivo = valor === "" ? "" : valor === "true";
+                setAtivo(novoAtivo);
+                setPagina(1);
+                void carregarSolicitantes(1, { nome: buscaNome, matricula: buscaMatricula, tipo, ativo: novoAtivo });
+              }}
+              className="xl:w-48"
+            >
+              <option value="">Todas as situações</option>
+              <option value="true">Ativos</option>
+              <option value="false">Inativos</option>
+            </Selecao>
+            <div className="flex items-center gap-2.5">
+              <Botao
+                variante="primario"
+                onClick={buscar}
+                icone={<Icone nome="buscar" />}
+                className="flex-1 xl:flex-none"
+              >
+                Buscar
+              </Botao>
+              {temFiltros && (
+                <Botao variante="sutil" onClick={limparFiltros}>
+                  Limpar
+                </Botao>
+              )}
+            </div>
+          </div>
         </section>
 
-        {erro && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400" role="alert">{erro}</div>
-        )}
+        {erro && <Alerta className="mb-6">{erro}</Alerta>}
 
-        <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
-          <DataTable colunas={colunas} dados={solicitantes}
-            carregando={carregando} mensagemVazia="Nenhum solicitante encontrado." />
-          <Pagination paginaAtual={pagina} totalPaginas={totalPaginas}
+        <Cartao
+          semRecuo
+          acao={
+            <Contagem>
+              {pluralizar(total, "solicitante encontrado", "solicitantes encontrados")}
+            </Contagem>
+          }
+        >
+          <DataTable
+            colunas={colunas}
+            dados={solicitantes}
+            carregando={carregando}
+            mensagemVazia="Nenhum solicitante encontrado."
+            dicaVazia="Ajuste a busca e os filtros ou cadastre um novo solicitante."
+          />
+          <Pagination
+            paginaAtual={pagina}
+            totalPaginas={totalPaginas}
             onAnterior={() => carregarSolicitantes(pagina - 1)}
-            onProxima={() => carregarSolicitantes(pagina + 1)} />
-        </section>
+            onProxima={() => carregarSolicitantes(pagina + 1)}
+          />
+        </Cartao>
       </div>
 
-      <Modal aberto={!!modalTipo} onClose={fecharModal}
-        titulo={modalTipo === "cadastro" ? "Novo solicitante" : "Editar solicitante"}>
-        <div className="mb-4">
-          <label htmlFor="nome" className="mb-2 block text-sm font-medium">Nome</label>
-          <input id="nome" type="text" value={nome} onChange={(e) => setNome(e.target.value)}
-            placeholder="Nome completo"
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-        </div>
-        <div className="mb-4">
-          <label htmlFor="tipo" className="mb-2 block text-sm font-medium">Tipo</label>
-          <select id="tipo" value={tipoForm} onChange={(e) => setTipoForm(e.target.value as TipoSolicitante)}
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer">
-            <option value="ALUNO">Aluno</option>
-            <option value="PROFESSOR">Professor</option>
-            <option value="SERVIDOR">Servidor</option>
-          </select>
-        </div>
-        <div className="mb-4">
-          <label htmlFor="matricula" className="mb-2 block text-sm font-medium">Matrícula</label>
-          <input id="matricula" type="text" value={matricula} onChange={(e) => setMatricula(e.target.value)}
-            placeholder="Número da matrícula"
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-        </div>
-        <div className="mb-6">
-          <label htmlFor="contato" className="mb-2 block text-sm font-medium">Contato</label>
-          <input id="contato" type="text" value={contato} onChange={(e) => setContato(e.target.value)}
-            placeholder="E-mail ou telefone"
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500" />
-        </div>
-        {erroModal && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-400" role="alert">{erroModal}</div>
-        )}
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={fecharModal} disabled={salvando}
-            className="rounded-md border border-gray-700 px-5 py-3 font-semibold text-gray-300 hover:bg-gray-800 disabled:opacity-40 cursor-pointer">
-            Cancelar
-          </button>
-          <button type="button" onClick={confirmarSalvar} disabled={salvando}
-            className="rounded-md bg-green-700 px-5 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40">
-            {salvando ? "Salvando..." : modalTipo === "cadastro" ? "Cadastrar" : "Salvar"}
-          </button>
+      <Modal
+        aberto={!!modalTipo}
+        onClose={fecharModal}
+        titulo={modalTipo === "cadastro" ? "Novo solicitante" : "Editar solicitante"}
+      >
+        <div className="space-y-4">
+          <Campo label="Nome" htmlFor="nome">
+            <Entrada
+              id="nome"
+              type="text"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Nome completo"
+            />
+          </Campo>
+          <Campo label="Tipo" htmlFor="tipo">
+            <Selecao
+              id="tipo"
+              value={tipoForm}
+              onChange={(e) => setTipoForm(e.target.value as TipoSolicitante)}
+            >
+              <option value="ALUNO">Aluno</option>
+              <option value="PROFESSOR">Professor</option>
+              <option value="SERVIDOR">Servidor</option>
+            </Selecao>
+          </Campo>
+          <Campo label="Matrícula" htmlFor="matricula">
+            <Entrada
+              id="matricula"
+              type="text"
+              value={matricula}
+              onChange={(e) => setMatricula(e.target.value)}
+              placeholder="Número da matrícula"
+            />
+          </Campo>
+          <Campo label="Contato" htmlFor="contato">
+            <Entrada
+              id="contato"
+              type="text"
+              value={contato}
+              onChange={(e) => setContato(e.target.value)}
+              placeholder="E-mail ou telefone"
+            />
+          </Campo>
+
+          {erroModal && <Alerta>{erroModal}</Alerta>}
+
+          <div className="flex flex-wrap justify-end gap-2.5 pt-1">
+            <Botao variante="secundario" onClick={fecharModal} disabled={salvando}>
+              Cancelar
+            </Botao>
+            <Botao variante="primario" onClick={confirmarSalvar} carregando={salvando}>
+              {salvando ? "Salvando..." : modalTipo === "cadastro" ? "Cadastrar" : "Salvar"}
+            </Botao>
+          </div>
         </div>
       </Modal>
 
-      <ConfirmDialog aberto={!!solicitanteParaInativar} onClose={() => setSolicitanteParaInativar(null)}
-        onConfirmar={executarInativacao} titulo="Inativar solicitante"
+      <ConfirmDialog
+        aberto={!!solicitanteParaInativar}
+        onClose={() => setSolicitanteParaInativar(null)}
+        onConfirmar={executarInativacao}
+        titulo="Inativar solicitante"
         mensagem={`Tem certeza que deseja inativar ${solicitanteParaInativar?.nome}?`}
-        textoConfirmar="Confirmar inativação" carregando={inativando} />
+        textoConfirmar="Confirmar inativação"
+        carregando={inativando}
+      />
     </>
   );
 }

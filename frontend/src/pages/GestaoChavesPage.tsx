@@ -12,6 +12,13 @@ import Modal from "../components/Modal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
+import { Alerta } from "../components/ui/Alerta";
+import { Botao } from "../components/ui/Botao";
+import { Cartao, Contagem } from "../components/ui/Cartao";
+import { Campo, Entrada, EntradaBusca, Selecao } from "../components/ui/Campos";
+import { Icone } from "../components/ui/Icone";
+import { Selo } from "../components/ui/Selo";
+import { pluralizar } from "../utils/formatacao";
 
 type ModalTipo = "cadastro" | "edicao" | null;
 
@@ -27,6 +34,7 @@ function GestaoChavesPage() {
 
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
   const [chaveEmEdicao, setChaveEmEdicao] = useState<Chave | null>(null);
@@ -69,6 +77,7 @@ function GestaoChavesPage() {
       setChaves(resposta.data);
       setPagina(resposta.meta.page);
       setTotalPaginas(resposta.meta.totalPages);
+      setTotal(resposta.meta.total);
     } catch (error) {
       if (requisicao !== requisicaoRef.current) return;
       setErro(
@@ -88,6 +97,14 @@ function GestaoChavesPage() {
   function buscar() {
     setPagina(1);
     carregarChaves(1);
+  }
+
+  function limparFiltros() {
+    setBusca("");
+    setStatus("");
+    setAtivo("");
+    setPagina(1);
+    carregarChaves(1, { busca: "", status: "", ativo: "" });
   }
 
   function abrirModalCadastro() {
@@ -187,71 +204,67 @@ function GestaoChavesPage() {
     }
   }
 
+  const temFiltros = Boolean(busca || status || ativo !== "");
+
   const colunas: Coluna<Chave>[] = [
-    { key: "codigo", titulo: "Código" },
+    { key: "codigo", titulo: "Código", mono: true },
     { key: "descricao", titulo: "Descrição" },
-    { key: "localizacao", titulo: "Localização" },
+    {
+      key: "localizacao",
+      titulo: "Localização",
+      render: (chave) => <span className="text-texto-medio">{chave.localizacao}</span>,
+    },
     {
       key: "status",
       titulo: "Status",
       render: (chave) => (
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            chave.status === "DISPONIVEL"
-              ? "bg-green-900 text-green-300"
-              : "bg-yellow-900 text-yellow-300"
-          }`}
-        >
+        <Selo variante={chave.status === "DISPONIVEL" ? "disponivel" : "emprestada"}>
           {chave.status === "DISPONIVEL" ? "Disponível" : "Emprestada"}
-        </span>
+        </Selo>
       ),
     },
     {
       key: "ativo",
       titulo: "Ativo",
       render: (chave) => (
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            chave.ativo ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-300"
-          }`}
-        >
+        <Selo variante={chave.ativo ? "ativo" : "inativo"}>
           {chave.ativo ? "Ativo" : "Inativo"}
-        </span>
+        </Selo>
       ),
     },
     {
       key: "acoes",
       titulo: "Ações",
+      acoes: true,
       render: (chave) => (
-        <div className="flex gap-2">
-          <button
-            type="button"
+        <div className="flex flex-wrap gap-1">
+          <Botao
+            tamanho="sm"
+            variante="sutil"
             aria-label={`Editar chave ${chave.codigo}`}
             onClick={() => abrirModalEdicao(chave)}
-            className="rounded-md border border-gray-700 px-3 py-1 text-sm font-medium text-gray-300 hover:bg-gray-800 cursor-pointer"
           >
             Editar
-          </button>
-          {chave.ativo && (
-            <button
-              type="button"
+          </Botao>
+          {chave.ativo ? (
+            <Botao
+              tamanho="sm"
+              variante="sutil-perigo"
               aria-label={`Inativar chave ${chave.codigo}`}
               onClick={() => setChaveParaInativar(chave)}
-              className="rounded-md border border-red-800 px-3 py-1 text-sm font-medium text-red-400 hover:bg-red-950/40 cursor-pointer"
             >
               Inativar
-            </button>
-          )}
-          {!chave.ativo && (
-            <button
-              type="button"
+            </Botao>
+          ) : (
+            <Botao
+              tamanho="sm"
+              variante="sutil-verde"
               aria-label={`Reativar chave ${chave.codigo}`}
               onClick={() => executarReativacao(chave)}
               disabled={reativando}
-              className="rounded-md border border-green-800 px-3 py-1 text-sm font-medium text-green-400 hover:bg-green-950/40 disabled:opacity-40 cursor-pointer"
             >
               Reativar
-            </button>
+            </Botao>
           )}
         </div>
       ),
@@ -260,84 +273,92 @@ function GestaoChavesPage() {
 
   return (
     <>
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto w-full max-w-6xl">
         <PageHeader
           titulo="Gestão de chaves"
           subtitulo="Cadastre, edite e gerencie as chaves das salas e laboratórios."
         >
-          <button
-            type="button"
+          <Botao
+            variante="primario"
             onClick={abrirModalCadastro}
-            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer"
+            icone={<Icone nome="mais" />}
           >
             Nova chave
-          </button>
+          </Botao>
         </PageHeader>
 
-        <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-800 bg-gray-900 p-5 md:flex-row">
-          <input
-            type="text"
-            placeholder="Buscar por código, descrição ou localização..."
-            aria-label="Buscar chaves por código, descrição ou localização"
-            value={busca}
-            onChange={(event) => setBusca(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") buscar();
-            }}
-            className="flex-1 rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500"
-          />
-          <select
-            value={status}
-            aria-label="Filtrar por status"
-            onChange={(event) => {
-              const novoStatus = event.target.value as StatusChave | "";
-              setStatus(novoStatus);
-              setPagina(1);
-              void carregarChaves(1, { busca, status: novoStatus, ativo });
-            }}
-            className="rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer"
-          >
-            <option value="">Todos os status</option>
-            <option value="DISPONIVEL">Disponível</option>
-            <option value="EMPRESTADA">Emprestada</option>
-          </select>
-          <select
-            value={ativo === "" ? "" : String(ativo)}
-            aria-label="Filtrar por situação do cadastro"
-            onChange={(event) => {
-              const valor = event.target.value;
-              const novoAtivo = valor === "" ? "" : valor === "true";
-              setAtivo(novoAtivo);
-              setPagina(1);
-              void carregarChaves(1, { busca, status, ativo: novoAtivo });
-            }}
-            className="rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500 cursor-pointer"
-          >
-            <option value="">Todos</option>
-            <option value="true">Ativos</option>
-            <option value="false">Inativos</option>
-          </select>
-          <button
-            type="button"
-            onClick={buscar}
-            className="rounded-md bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer"
-          >
-            Buscar
-          </button>
+        <section className="mb-6 rounded-xl border border-linha bg-superficie p-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <EntradaBusca
+              rotulo="Buscar chaves por código, descrição ou localização"
+              placeholder="Buscar por código, descrição ou localização..."
+              value={busca}
+              onChange={(event) => setBusca(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") buscar();
+              }}
+            />
+            <Selecao
+              value={status}
+              aria-label="Filtrar por status"
+              onChange={(event) => {
+                const novoStatus = event.target.value as StatusChave | "";
+                setStatus(novoStatus);
+                setPagina(1);
+                void carregarChaves(1, { busca, status: novoStatus, ativo });
+              }}
+              className="xl:w-44"
+            >
+              <option value="">Todos os status</option>
+              <option value="DISPONIVEL">Disponível</option>
+              <option value="EMPRESTADA">Emprestada</option>
+            </Selecao>
+            <Selecao
+              value={ativo === "" ? "" : String(ativo)}
+              aria-label="Filtrar por situação do cadastro"
+              onChange={(event) => {
+                const valor = event.target.value;
+                const novoAtivo = valor === "" ? "" : valor === "true";
+                setAtivo(novoAtivo);
+                setPagina(1);
+                void carregarChaves(1, { busca, status, ativo: novoAtivo });
+              }}
+              className="xl:w-48"
+            >
+              <option value="">Todas as situações</option>
+              <option value="true">Ativos</option>
+              <option value="false">Inativos</option>
+            </Selecao>
+            <div className="flex items-center gap-2.5">
+              <Botao
+                variante="primario"
+                onClick={buscar}
+                icone={<Icone nome="buscar" />}
+                className="flex-1 xl:flex-none"
+              >
+                Buscar
+              </Botao>
+              {temFiltros && (
+                <Botao variante="sutil" onClick={limparFiltros}>
+                  Limpar
+                </Botao>
+              )}
+            </div>
+          </div>
         </section>
 
-        {erro && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-red-400" role="alert">
-            {erro}
-          </div>
-        )}
+        {erro && <Alerta className="mb-6">{erro}</Alerta>}
 
-        <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
+        <Cartao
+          semRecuo
+          acao={<Contagem>{pluralizar(total, "chave encontrada", "chaves encontradas")}</Contagem>}
+        >
           <DataTable
             colunas={colunas}
             dados={chaves}
             carregando={carregando}
             mensagemVazia="Nenhuma chave encontrada."
+            dicaVazia="Ajuste a busca e os filtros ou cadastre uma nova chave."
           />
           <Pagination
             paginaAtual={pagina}
@@ -345,7 +366,7 @@ function GestaoChavesPage() {
             onAnterior={() => carregarChaves(pagina - 1)}
             onProxima={() => carregarChaves(pagina + 1)}
           />
-        </section>
+        </Cartao>
       </div>
 
       <Modal
@@ -353,68 +374,50 @@ function GestaoChavesPage() {
         onClose={fecharModal}
         titulo={modalTipo === "cadastro" ? "Nova chave" : "Editar chave"}
       >
-        <div className="mb-4">
-          <label htmlFor="codigo" className="mb-2 block text-sm font-medium">
-            Código
-          </label>
-          <input
-            id="codigo"
-            type="text"
-            value={codigo}
-            onChange={(event) => setCodigo(event.target.value)}
-            placeholder="Ex: SALA-001"
-            maxLength={20}
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500"
-          />
-        </div>
-        <div className="mb-4">
-          <label htmlFor="descricao" className="mb-2 block text-sm font-medium">
-            Descrição
-          </label>
-          <input
-            id="descricao"
-            type="text"
-            value={descricao}
-            onChange={(event) => setDescricao(event.target.value)}
-            placeholder="Ex: Chave da sala 101"
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500"
-          />
-        </div>
-        <div className="mb-6">
-          <label htmlFor="localizacao" className="mb-2 block text-sm font-medium">
-            Localização
-          </label>
-          <input
-            id="localizacao"
-            type="text"
-            value={localizacao}
-            onChange={(event) => setLocalizacao(event.target.value)}
-            placeholder="Ex: Bloco A, Sala 101"
-            className="w-full rounded-md border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none focus:border-green-500"
-          />
-        </div>
-        {erroModal && (
-          <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-400" role="alert">
-            {erroModal}
+        <div className="space-y-4">
+          <Campo label="Código" htmlFor="codigo">
+            <Entrada
+              id="codigo"
+              type="text"
+              value={codigo}
+              onChange={(event) => setCodigo(event.target.value)}
+              placeholder="Ex: SALA-001"
+              maxLength={20}
+            />
+          </Campo>
+          <Campo label="Descrição" htmlFor="descricao">
+            <Entrada
+              id="descricao"
+              type="text"
+              value={descricao}
+              onChange={(event) => setDescricao(event.target.value)}
+              placeholder="Ex: Chave da sala 101"
+            />
+          </Campo>
+          <Campo label="Localização" htmlFor="localizacao">
+            <Entrada
+              id="localizacao"
+              type="text"
+              value={localizacao}
+              onChange={(event) => setLocalizacao(event.target.value)}
+              placeholder="Ex: Bloco A, Sala 101"
+            />
+          </Campo>
+
+          {erroModal && <Alerta>{erroModal}</Alerta>}
+
+          <div className="flex flex-wrap justify-end gap-2.5 pt-1">
+            <Botao variante="secundario" onClick={fecharModal} disabled={salvando}>
+              Cancelar
+            </Botao>
+            <Botao
+              variante="primario"
+              onClick={confirmarSalvar}
+              carregando={salvando}
+            >
+              {salvando ? "Salvando..." : modalTipo === "cadastro" ? "Cadastrar" : "Salvar"}
+            </Botao>
           </div>
-        )}
-        <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={fecharModal}
-            disabled={salvando}
-            className="rounded-md border border-gray-700 px-5 py-3 font-semibold text-gray-300 hover:bg-gray-800 disabled:opacity-40 cursor-pointer"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={confirmarSalvar}
-            disabled={salvando}
-            className="rounded-md bg-green-700 px-5 py-3 font-semibold text-white hover:bg-green-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {salvando ? "Salvando..." : modalTipo === "cadastro" ? "Cadastrar" : "Salvar"}
-          </button>
         </div>
       </Modal>
 

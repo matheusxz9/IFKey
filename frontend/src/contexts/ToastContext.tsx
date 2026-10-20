@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
+import { Icone, type NomeIcone } from "../components/ui/Icone";
+import { cn } from "../utils/classes";
 
 type ToastTipo = "success" | "error" | "warning";
 
@@ -59,7 +61,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div
         role="status"
         aria-live="polite"
-        className="fixed right-4 top-4 z-[100] flex flex-col gap-3"
+        className="pointer-events-none fixed top-4 right-4 left-4 z-[100] flex flex-col items-end gap-2.5 sm:left-auto"
       >
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} onRemove={() => remover(toast.id)} />
@@ -69,25 +71,55 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) {
-  const cores: Record<ToastTipo, string> = {
-    success: "border-green-700 bg-green-950 text-green-300",
-    error: "border-red-700 bg-red-950 text-red-300",
-    warning: "border-yellow-700 bg-yellow-950 text-yellow-300",
-  };
+const estilos: Record<
+  ToastTipo,
+  { borda: string; chip: string; icone: NomeIcone }
+> = {
+  success: {
+    borda: "border-verde/35",
+    chip: "bg-veu-verde text-verde-claro",
+    icone: "confirmado",
+  },
+  error: {
+    borda: "border-vermelho/35",
+    chip: "bg-veu-vermelho text-vermelho",
+    icone: "erro",
+  },
+  warning: {
+    borda: "border-ambar/35",
+    chip: "bg-veu-ambar text-ambar",
+    icone: "alerta",
+  },
+};
 
-  const icones: Record<ToastTipo, string> = {
-    success: "✓",
-    error: "✕",
-    warning: "⚠",
-  };
+function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) {
+  const estilo = estilos[toast.tipo];
 
   return (
-    <div className={`flex items-center gap-3 rounded-lg border px-4 py-3 shadow-lg animate-slide-in ${cores[toast.tipo]}`}>
-      <span className="text-lg">{icones[toast.tipo]}</span>
-      <p className="text-sm font-medium">{toast.mensagem}</p>
-      <button type="button" onClick={onRemove} className="ml-2 cursor-pointer opacity-60 hover:opacity-100" aria-label="Fechar">
-        ×
+    <div
+      className={cn(
+        "animate-slide-in pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border bg-superficie px-4 py-3 shadow-xl",
+        estilo.borda,
+      )}
+    >
+      <span
+        className={cn(
+          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
+          estilo.chip,
+        )}
+      >
+        <Icone nome={estilo.icone} className="h-3.5 w-3.5" />
+      </span>
+      <p className="min-w-0 flex-1 text-sm leading-relaxed text-texto-medio">
+        {toast.mensagem}
+      </p>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Fechar"
+        className="-mt-0.5 -mr-1 cursor-pointer rounded-md p-1 text-texto-fraco transition-colors hover:bg-superficie-ativa hover:text-texto"
+      >
+        <Icone nome="fechar" className="h-3.5 w-3.5" />
       </button>
     </div>
   );

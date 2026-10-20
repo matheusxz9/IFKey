@@ -97,7 +97,53 @@ describe('AuthService.loginSuap', () => {
 
     const resultado = await service.loginSuap('code');
 
-    expect(resultado.user).toMatchObject({ id: 1, tipo: 'admin' });
+    expect(resultado.user).toMatchObject({
+      id: 1,
+      tipo: 'admin',
+      nome: 'Matheus',
+    });
+  });
+
+  it('resolve administrador pelo prefixo do e-mail pessoal (`email`)', async () => {
+    suapService.buscarUsuario.mockResolvedValue({
+      identificacao: '20251038060035',
+      email: 'pedro@gmail.com',
+    });
+    adminRepo.findOne.mockResolvedValue({
+      id: 2,
+      login: 'pedro',
+      perfil: 'ADMINISTRADOR',
+      nome: 'Pedro',
+    });
+
+    const resultado = await service.loginSuap('code');
+
+    expect(resultado.user).toMatchObject({
+      id: 2,
+      tipo: 'admin',
+      login: 'pedro',
+    });
+  });
+
+  it('resolve administrador pelo prefixo de `email_preferencial`', async () => {
+    suapService.buscarUsuario.mockResolvedValue({
+      email_preferencial: 'pedro.fonseca1@ifrn.edu.br',
+    });
+    adminRepo.findOne.mockResolvedValue({
+      id: 3,
+      login: 'pedro.fonseca1',
+      perfil: 'ADMINISTRADOR',
+      nome: 'Pedro Eduardo',
+    });
+
+    const resultado = await service.loginSuap('code');
+
+    expect(resultado.user).toMatchObject({
+      id: 3,
+      tipo: 'admin',
+      login: 'pedro.fonseca1',
+      nome: 'Pedro Eduardo',
+    });
   });
 
   it('lança SemPermissao quando não há cadastro', async () => {
