@@ -55,8 +55,8 @@ export default defineConfig({
       timeout: 180_000,
       env: {
         E2E_API_URL,
-        // A suíte faz muitas chamadas de /auth/me (uma por apiFetch) a partir do
-        // mesmo IP; o limite padrão (100/min) derruba tudo com 429.
+        // A suíte faz muitas chamadas à API a partir do mesmo IP; o limite
+        // padrão (100/min) poderia derrubar a preparação dos dados com 429.
         THROTTLE_LIMIT: process.env.THROTTLE_LIMIT ?? "100000",
         THROTTLE_TTL: process.env.THROTTLE_TTL ?? "60000",
       },

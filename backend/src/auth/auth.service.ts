@@ -10,6 +10,15 @@ import { RefreshToken } from './refresh-token.entity';
 import { SemPermissaoException } from '../common/exceptions/app.exception';
 import { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
 
+export interface UsuarioAutenticado {
+  id: number;
+  nome: string;
+  login?: string;
+  matricula?: string;
+  perfil: string;
+  tipo: 'admin' | 'solicitante';
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -193,7 +202,7 @@ export class AuthService {
     );
   }
 
-  async perfil(userId: number, perfil: string) {
+  async perfil(userId: number, perfil: string): Promise<UsuarioAutenticado> {
     if (perfil === 'SOLICITANTE') {
       const solicitante = await this.solicitanteRepo.findOne({
         where: { id: userId },

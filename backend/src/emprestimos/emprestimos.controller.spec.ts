@@ -6,6 +6,7 @@ import { EmprestimosService } from './emprestimos.service';
 import { Emprestimo } from './emprestimo.entity';
 import { ChavesService } from '../chaves/chaves.service';
 import { SolicitantesService } from '../solicitantes/solicitantes.service';
+import { AuthService } from '../auth/auth.service';
 
 describe('EmprestimosController', () => {
   let controller: EmprestimosController;
@@ -19,6 +20,7 @@ describe('EmprestimosController', () => {
         { provide: ChavesService, useValue: {} },
         { provide: SolicitantesService, useValue: {} },
         { provide: JwtService, useValue: {} },
+        { provide: AuthService, useValue: {} },
       ],
     }).compile();
 

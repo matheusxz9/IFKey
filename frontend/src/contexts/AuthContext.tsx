@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-import { EVENTO_USUARIO_ATUALIZADO } from "../services/api";
+import API_URL, { EVENTO_USUARIO_ATUALIZADO } from "../services/api";
 
 export type Perfil = "ADMINISTRADOR" | "GESTOR" | "SOLICITANTE";
 
@@ -81,11 +81,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const logout = useCallback(() => {
+    const refreshToken = localStorage.getItem("refreshToken");
+
     setToken(null);
     setUser(null);
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
+
+    if (!refreshToken) return;
+
+    // Revoga o refresh token no servidor sem atrasar a saída local. O logout
+    // é público e idempotente: funciona mesmo com o access token expirado.
+    void fetch(`${API_URL}/auth/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+      keepalive: true,
+    }).catch(() => undefined);
   }, []);
 
   const login = useCallback((novoToken: string, novoUser: User) => {

@@ -58,7 +58,9 @@ test.describe("sem sessão", () => {
 test.describe("com sessão", () => {
   test.use({ storageState: caminhoStorageState("admin") });
 
-  test("renova o access token quando o /auth/me responde 401", async ({ page }) => {
+  test("renova o access token e repete a requisição quando a API responde 401", async ({
+    page,
+  }) => {
     const admin = lerUsuarios().admin;
     const tokenRenovado = tokenDe(admin);
     // O storageState não guarda refreshToken: injeta um antigo para que a
@@ -67,38 +69,62 @@ test.describe("com sessão", () => {
       localStorage.setItem("refreshToken", "refresh-antigo");
     });
 
-    await page.route(`${API_URL}/auth/me`, (route) =>
-      route.fulfill({
-        status: 401,
-        contentType: "application/json",
-        body: JSON.stringify({
-          statusCode: 401,
-          message: "Token inválido.",
-          code: "NAO_AUTENTICADO",
-        }),
-      }),
-    );
-    await page.route(`${API_URL}/auth/refresh`, (route) =>
-      route.fulfill({
+    let renovacoes = 0;
+    let tokenRenovadoDisponivel = false;
+
+    await page.route(`${API_URL}/auth/refresh`, (route) => {
+      renovacoes += 1;
+      tokenRenovadoDisponivel = true;
+      return route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           accessToken: tokenRenovado,
           refreshToken: "refresh-renovado",
         }),
-      }),
-    );
+      });
+    });
+    await page.route(`${API_URL}/chaves*`, (route) => {
+      // O StrictMode dispara o efeito duas vezes em desenvolvimento. Mantém o
+      // 401 até a renovação acontecer para que a repetição use o token novo.
+      if (!tokenRenovadoDisponivel) {
+        return route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({
+            statusCode: 401,
+            message: "Token inválido.",
+            code: "NAO_AUTENTICADO",
+          }),
+        });
+      }
+      return route.continue();
+    });
 
     await page.goto("/chaves");
 
     await expect(page.getByRole("heading", { name: "Chaves" })).toBeVisible();
     await expect(page.getByRole("table").first()).toBeVisible();
+    expect(renovacoes).toBeGreaterThanOrEqual(1);
     expect(await page.evaluate(() => localStorage.getItem("accessToken"))).toBe(
       tokenRenovado,
     );
     expect(await page.evaluate(() => localStorage.getItem("refreshToken"))).toBe(
       "refresh-renovado",
     );
+  });
+
+  test("não faz pré-validação em /auth/me antes de cada requisição", async ({ page }) => {
+    let chamadasMe = 0;
+    await page.route(`${API_URL}/auth/me`, (route) => {
+      chamadasMe += 1;
+      return route.continue();
+    });
+
+    await page.goto("/chaves");
+
+    await expect(page.getByRole("table").first()).toBeVisible();
+    expect(chamadasMe).toBe(0);
   });
 
   test("erro de rede ao carregar a lista mostra alerta sem quebrar a página", async ({
@@ -113,8 +139,13 @@ test.describe("com sessão", () => {
     await expect(page.getByRole("button", { name: "Sair" })).toBeVisible();
   });
 
-  test("429 no /auth/me não derruba a sessão do usuário", async ({ page }) => {
-    await page.route(`${API_URL}/auth/me`, (route) =>
+  test("429 na API não derruba a sessão do usuário", async ({ page }) => {
+    let renovacoes = 0;
+    await page.route(`${API_URL}/auth/refresh`, (route) => {
+      renovacoes += 1;
+      return route.fulfill({ status: 500, body: "" });
+    });
+    await page.route(`${API_URL}/chaves*`, (route) =>
       route.fulfill({
         status: 429,
         contentType: "application/json",
@@ -127,7 +158,8 @@ test.describe("com sessão", () => {
     // Não redireciona para o login nem tenta renovar o token.
     await expect(page).toHaveURL(/\/chaves$/);
     await expect(page.getByRole("heading", { name: "Chaves" })).toBeVisible();
-    await expect(page.getByRole("table").first()).toBeVisible();
+    await expect(page.getByRole("alert").first()).toBeVisible();
+    expect(renovacoes).toBe(0);
     expect(await page.evaluate(() => localStorage.getItem("accessToken"))).toBeTruthy();
     expect(await page.evaluate(() => localStorage.getItem("refreshToken"))).toBeNull();
   });
@@ -212,9 +244,8 @@ test("a página de login continua renderizando o botão do SUAP", async ({ page 
 });
 
 /**
- * Regressão (bug P2 corrigido): `/auth/me` é chamado a cada apiFetch e estava
- * sujeito ao throttler global (100 req/min por IP), derrubando a sessão com
- * 429. O endpoint agora usa @SkipThrottle().
+ * `/auth/me` segue isento do throttler porque pode ser chamado na recuperação
+ * da sessão; uma rajada não deve derrubar o usuário com 429.
  */
 test("GET /auth/me não sofre rate limit mesmo sob rajada", async ({ request }) => {
   await test.step("dispara 120 requisições e espera todas 200", async () => {

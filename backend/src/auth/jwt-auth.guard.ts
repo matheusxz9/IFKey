@@ -5,34 +5,49 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { AuthService } from './auth.service';
+import type { UsuarioAutenticado } from './auth.service';
+import { SemPermissaoException } from '../common/exceptions/app.exception';
+
+interface RequisicaoAutenticada {
+  headers: { authorization?: string };
+  user?: UsuarioAutenticado;
+}
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly authService: AuthService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<{
-      headers: { authorization?: string };
-      user?: { id: number; login: string; perfil: string };
-    }>();
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<RequisicaoAutenticada>();
     const header = request.headers.authorization;
     if (!header?.startsWith('Bearer ')) {
       throw new UnauthorizedException('Token não informado.');
     }
+
+    let payload: { sub: number; login: string; perfil: string };
     try {
-      const payload = this.jwtService.verify<{
+      payload = this.jwtService.verify<{
         sub: number;
         login: string;
         perfil: string;
       }>(header.slice(7));
-      request.user = {
-        id: payload.sub,
-        login: payload.login,
-        perfil: payload.perfil,
-      };
-      return true;
     } catch {
       throw new UnauthorizedException('Token inválido ou expirado.');
     }
+
+    try {
+      request.user = await this.authService.perfil(payload.sub, payload.perfil);
+    } catch (erro) {
+      if (erro instanceof SemPermissaoException) {
+        throw new UnauthorizedException('Usuário inativo ou não encontrado.');
+      }
+      throw erro;
+    }
+
+    return true;
   }
 }

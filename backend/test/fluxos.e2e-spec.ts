@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import jwt from 'jsonwebtoken';
+import { createHash } from 'crypto';
 import { DataSource } from 'typeorm';
 import { AppModule } from './../src/app.module';
 import { HttpExceptionFilter } from './../src/common/filters/http-exception.filter';
@@ -37,10 +38,13 @@ describe('Fluxos de negócio (e2e)', () => {
 
     const dataSource = app.get(DataSource);
     await dataSource.query(
-      'TRUNCATE TABLE emprestimo, chave, solicitante, administrador RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE emprestimo, chave, solicitante, administrador, refresh_token RESTART IDENTITY CASCADE',
     );
     await dataSource.query(
       "INSERT INTO administrador (id, nome, login, perfil, ativo) VALUES (1, 'Admin Teste', 'admin.teste', 'ADMINISTRADOR', true)",
+    );
+    await dataSource.query(
+      "SELECT setval(pg_get_serial_sequence('administrador', 'id'), 1, true)",
     );
 
     token = jwt.sign(
@@ -85,6 +89,108 @@ describe('Fluxos de negócio (e2e)', () => {
       })
       .expect(400);
     expect(res.body).toMatchObject({ statusCode: 400, code: 'VALIDACAO' });
+  });
+
+  it('normaliza espaços dos campos de texto', async () => {
+    const res = await request(server)
+      .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        nome: '  João Trim  ',
+        tipo: 'ALUNO',
+        matricula: ' 2024000002 ',
+        contato: '  joao.trim@if.edu.br  ',
+      })
+      .expect(201);
+    expect(res.body).toMatchObject({
+      nome: 'João Trim',
+      matricula: '2024000002',
+      contato: 'joao.trim@if.edu.br',
+    });
+  });
+
+  it('rejeita nome acima do limite (400 VALIDACAO)', async () => {
+    const res = await request(server)
+      .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        nome: 'a'.repeat(121),
+        tipo: 'ALUNO',
+        matricula: '2024000003',
+        contato: 'limite@if.edu.br',
+      })
+      .expect(400);
+    expect(res.body).toMatchObject({ statusCode: 400, code: 'VALIDACAO' });
+  });
+
+  it('rejeita campo obrigatório em branco após trim (400 VALIDACAO)', async () => {
+    const res = await request(server)
+      .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        nome: '   ',
+        tipo: 'ALUNO',
+        matricula: '2024000004',
+        contato: 'vazio@if.edu.br',
+      })
+      .expect(400);
+    expect(res.body).toMatchObject({ statusCode: 400, code: 'VALIDACAO' });
+  });
+
+  it('rejeita observações acima do limite (400 VALIDACAO)', async () => {
+    const res = await request(server)
+      .post('/api/emprestimos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        solicitanteId: 1,
+        chaveId: 999,
+        observacoes: 'x'.repeat(256),
+      })
+      .expect(400);
+    expect(res.body).toMatchObject({ statusCode: 400, code: 'VALIDACAO' });
+  });
+
+  it('rejeita refresh token ausente com 400 (não 500)', async () => {
+    const res = await request(server)
+      .post('/api/auth/refresh')
+      .send({})
+      .expect(400);
+    expect(res.body).toMatchObject({ statusCode: 400, code: 'VALIDACAO' });
+  });
+
+  it('faz logout público e idempotente, revogando o refresh token', async () => {
+    const refreshToken = 'refresh-logout-e2e';
+    const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
+    const dataSource = app.get(DataSource);
+    await dataSource.query(
+      `INSERT INTO refresh_token ("tokenHash", "userId", "userType", "expires_at")
+       VALUES ($1, $2, $3, now() + interval '1 day')`,
+      [tokenHash, 1, 'admin'],
+    );
+
+    await request(server)
+      .post('/api/auth/logout')
+      .send({ refreshToken })
+      .expect(200);
+
+    const refresh = await request(server)
+      .post('/api/auth/refresh')
+      .send({ refreshToken })
+      .expect(403);
+    expect(refresh.body).toMatchObject({ code: 'SEM_PERMISSAO' });
+
+    // Repetir o logout (token já revogado) e usar um token desconhecido
+    // continua retornando 200: a operação é idempotente.
+    await request(server)
+      .post('/api/auth/logout')
+      .send({ refreshToken })
+      .expect(200);
+    await request(server)
+      .post('/api/auth/logout')
+      .send({ refreshToken: 'refresh-desconhecido' })
+      .expect(200);
+
+    await request(server).post('/api/auth/logout').send({}).expect(400);
   });
 
   it('rejeita matrícula duplicada (409 MATRICULA_DUPLICADA)', async () => {
@@ -327,5 +433,43 @@ describe('Fluxos de negócio (e2e)', () => {
       statusCode: 404,
       code: 'NAO_ENCONTRADO',
     });
+  });
+
+  it('bloqueia token de administrador inativado com 401', async () => {
+    const criado = await request(server)
+      .post('/api/administradores')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        nome: 'Gestor Inativado',
+        login: 'gestor.inativado',
+        perfil: 'GESTOR',
+      })
+      .expect(201);
+
+    const tokenInativo = jwt.sign(
+      {
+        sub: criado.body.id,
+        login: criado.body.login,
+        perfil: 'GESTOR',
+      },
+      JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+
+    await request(server)
+      .delete(`/api/administradores/${criado.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(204);
+
+    const listagem = await request(server)
+      .get('/api/chaves')
+      .set('Authorization', `Bearer ${tokenInativo}`)
+      .expect(401);
+    expect(listagem.body).toMatchObject({ code: 'NAO_AUTENTICADO' });
+
+    await request(server)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${tokenInativo}`)
+      .expect(401);
   });
 });

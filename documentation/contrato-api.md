@@ -2,7 +2,7 @@
 
 > **Status:** implementado — reflete a API atual
 > **Issue:** [#8 — Definir contrato de rotas da API](https://github.com/matheusxz9/IFKey/issues/8)
-> **Última atualização:** 2026-10-19
+> **Última atualização:** 2026-10-21
 >
 > Este documento define o contrato HTTP entre frontend e backend. A fonte viva é o
 > **Swagger** em `http://localhost:3000/docs`; mudanças no código devem ser refletidas aqui.
@@ -77,6 +77,17 @@ Erro de validação (`class-validator`), HTTP 400:
 }
 ```
 
+Excesso de requisições (`@nestjs/throttler`), HTTP 429:
+
+```json
+{
+  "statusCode": 429,
+  "error": "Too Many Requests",
+  "message": "ThrottlerException: Too Many Requests",
+  "code": "LIMITE_REQUISICOES"
+}
+```
+
 ## 5. Endpoints
 
 ### 5.1 Resumo
@@ -85,7 +96,7 @@ Erro de validação (`class-validator`), HTTP 400:
 |---|---|---|---|
 | POST | `/auth/suap` | público | Troca o `code` do SUAP por tokens (JWT + refresh) |
 | POST | `/auth/refresh` | público | Renova o par de tokens a partir do `refreshToken` |
-| POST | `/auth/logout` | autenticado | Revoga o `refreshToken` |
+| POST | `/auth/logout` | público | Revoga o `refreshToken` (idempotente) |
 | GET | `/auth/me` | autenticado | Dados do usuário autenticado (admin ou solicitante) |
 | GET | `/solicitantes` | ADMIN, GESTOR, SOLICITANTE | Lista solicitantes (filtros: `nome`, `matricula`, `tipo`, `ativo`) |
 | GET | `/solicitantes/:id` | ADMIN, GESTOR, SOLICITANTE | Detalhe do solicitante |
@@ -109,8 +120,9 @@ Erro de validação (`class-validator`), HTTP 400:
 | DELETE | `/administradores/:id` | ADMIN | Inativa administrador (soft delete) |
 | POST | `/administradores/:id/converter-solicitante` | ADMIN | Inativa o administrador e o cadastra como solicitante |
 
-> Todas as rotas (exceto `/auth/suap` e `/auth/refresh`) exigem `Authorization: Bearer <JWT>`;
-> os perfis são checados por rota (coluna Auth). `401 NAO_AUTENTICADO` sem token válido/expirado;
+> Todas as rotas (exceto `/auth/suap`, `/auth/refresh` e `/auth/logout`) exigem
+> `Authorization: Bearer <JWT>`; os perfis são checados por rota (coluna Auth). `401 NAO_AUTENTICADO`
+> sem token válido/expirado ou quando o usuário do token foi inativado/removido;
 > `403 SEM_PERMISSAO` quando o perfil não tem permissão.
 
 > **Solicitante escopado:** quando o autenticado é `SOLICITANTE`, ele opera apenas sobre si
@@ -153,14 +165,20 @@ POST /auth/suap
   (solicitante ativo). Sem cadastro ativo correspondente → `403 SEM_PERMISSAO`.
 - O `login` do administrador corresponde ao usuário do SUAP (`identificacao`, normalmente a parte
   antes do `@`); `matricula` é o número retornado pelo SUAP.
-- `POST /auth/refresh` (público) — body `{ "refreshToken": "<token>" }` → novo par
+- `POST /auth/refresh` (público, `200 OK`) — body `{ "refreshToken": "<token>" }` → novo par
   `{ accessToken, refreshToken, user }`. O refresh antigo é **revogado** a cada uso.
-  Token inválido/expirado → `403 SEM_PERMISSAO`.
-- `POST /auth/logout` (autenticado) — body `{ "refreshToken": "<token>" }` → revoga o token
-  (`{ "message": "Logout realizado com sucesso." }`).
+  Token inválido/expirado → `403 SEM_PERMISSAO`; body ausente/inválido → `400 VALIDACAO`.
+- `POST /auth/logout` (público, `200 OK`) — body `{ "refreshToken": "<token>" }` → revoga o
+  token e devolve `{ "message": "Logout realizado com sucesso." }`. Não exige access token:
+  token desconhecido, já revogado ou expirado também retorna `200` (operação idempotente).
+  Body ausente/inválido → `400 VALIDACAO`.
 - `GET /auth/me` (autenticado):
   - admin → `{ "id": 1, "nome": "...", "login": "...", "perfil": "ADMINISTRADOR", "tipo": "admin" }`
   - solicitante → `{ "id": 5, "nome": "...", "matricula": "...", "perfil": "SOLICITANTE", "tipo": "solicitante" }`
+- Toda rota autenticada confere no banco se o usuário do JWT continua ativo. Token de usuário
+  inativado/removido → `401 NAO_AUTENTICADO` (mesmo antes do JWT expirar).
+- No login, o frontend gera um `state` aleatório, guarda-o em `sessionStorage` e exige que o
+  callback o devolva exatamente igual; callback sem `state` ou com valor divergente é rejeitado.
 - Rotas protegidas exigem `Authorization: Bearer <JWT>`; `401 NAO_AUTENTICADO` sem token/expirado.
 
 ### 5.3 Solicitantes
@@ -191,6 +209,8 @@ Ordenação: `nome` asc.
 - `201` → objeto criado (`ativo` default `true`)
 - `400 VALIDACAO` · `409 MATRICULA_DUPLICADA`
 - `409 IDENTIFICADOR_DUPLICADO` quando a `matricula` coincide com o `login` de um administrador (mesma pessoa com dois cadastros)
+- Limites: `nome` 120, `matricula` 30 e `contato` 120 caracteres. Os três são `trim`ados;
+  valor vazio após o trim → `400 VALIDACAO`.
 
 **`PATCH /solicitantes/:id`** — qualquer subconjunto de `nome`, `tipo`, `matricula`, `contato`, `ativo`.
 Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLICADA` / `IDENTIFICADOR_DUPLICADO`).
@@ -230,6 +250,8 @@ Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLIC
 
 - `201` → `status` sempre inicia como `DISPONIVEL`
 - `400 VALIDACAO` · `409 CODIGO_CHAVE_DUPLICADO`
+- Limites: `codigo` 20, `descricao` 120 e `localizacao` 120 caracteres. Os três são `trim`ados;
+  valor vazio após o trim → `400 VALIDACAO`.
 
 **`PATCH /chaves/:id`** — `codigo`, `descricao`, `localizacao`, `ativo`.
 `status` **não é editável** por aqui: é alterado apenas pelo fluxo de empréstimo/devolução.
@@ -269,6 +291,7 @@ Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLIC
 - `400 VALIDACAO` · `404 NAO_ENCONTRADO` (solicitante/chave)
 - `409 CHAVE_INDISPONIVEL` (chave emprestada ou inativa)
 - `409 SOLICITANTE_INATIVO`
+- `observacoes` tem limite de 255 caracteres e é `trim`ada
 - para `SOLICITANTE`, o `solicitanteId` do body é ignorado (usa o próprio)
 
 **`PATCH /emprestimos/:id/devolucao`**
@@ -283,6 +306,7 @@ Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLIC
   `chave.status` → `DISPONIVEL` na mesma transação
 - `404 NAO_ENCONTRADO` · `403 SEM_PERMISSAO` (empréstimo de terceiros, quando `SOLICITANTE`)
   · `409 EMPRESTIMO_JA_DEVOLVIDO`
+- `observacoes` tem limite de 255 caracteres e é `trim`ada
 
 **`GET /emprestimos`** — filtros: `status` (`EMPRESTADA`/`DEVOLVIDA`), `solicitanteId`, `chaveId`, `page`, `limit`.
 Ordenação padrão: `dataHoraEmprestimo` desc.
@@ -376,14 +400,15 @@ Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `da
 
 | HTTP | Quando |
 |---|---|
-| 200 | GET/PATCH com sucesso |
-| 201 | POST com sucesso |
+| 200 | GET/PATCH com sucesso; `POST` de auth (`/auth/suap`, `/auth/refresh`, `/auth/logout`) |
+| 201 | POST de recurso com sucesso |
 | 204 | DELETE com sucesso |
 | 400 | Payload inválido (`VALIDACAO`) |
-| 401 | Token ausente/inválido (`NAO_AUTENTICADO`) |
+| 401 | Token ausente/inválido ou usuário inativo (`NAO_AUTENTICADO`) |
 | 403 | Perfil sem permissão (`SEM_PERMISSAO`) |
 | 404 | Recurso inexistente (`NAO_ENCONTRADO`) |
 | 409 | Conflito de estado/unicidade (ver `code` na §4) |
+| 429 | Limite de requisições por IP (`LIMITE_REQUISICOES`) |
 | 500 | Erro inesperado |
 
 Códigos `409` possíveis: `MATRICULA_DUPLICADA`, `CODIGO_CHAVE_DUPLICADO`, `LOGIN_DUPLICADO`,

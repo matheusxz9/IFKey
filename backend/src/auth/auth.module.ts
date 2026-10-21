@@ -24,6 +24,6 @@ import { RefreshToken } from './refresh-token.entity';
   ],
   controllers: [AuthController],
   providers: [AuthService, SuapService, JwtAuthGuard, RolesGuard],
-  exports: [JwtAuthGuard, RolesGuard, JwtModule],
+  exports: [JwtAuthGuard, RolesGuard, JwtModule, AuthService],
 })
 export class AuthModule {}

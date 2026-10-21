@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { apiComToken } from "../fixtures/api";
 import {
+  API_URL,
   caminhoApi,
   caminhoStorageState,
   lerUsuarios,
@@ -142,10 +143,30 @@ test.describe("sessão", () => {
     ).toContain('"matheus"');
   });
 
-  test("logout limpa o storage e devolve para a tela de login", async ({ page }) => {
+  test("logout revoga o refresh token, limpa o storage e devolve para o login", async ({
+    page,
+  }) => {
+    let corpoRevogacao: unknown;
+    let cabecalhoAutorizacao: string | undefined;
+
+    await page.route(`${API_URL}/auth/logout`, async (route) => {
+      corpoRevogacao = route.request().postDataJSON();
+      cabecalhoAutorizacao = route.request().headers()["authorization"];
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "Logout realizado com sucesso." }),
+      });
+    });
+
     await page.goto("/chaves");
+    await page.evaluate(() => localStorage.setItem("refreshToken", "refresh-e2e"));
     await page.getByRole("button", { name: "Sair" }).click();
 
+    await expect.poll(() => corpoRevogacao).toEqual({
+      refreshToken: "refresh-e2e",
+    });
+    expect(cabecalhoAutorizacao).toBeUndefined();
     await expect(page).toHaveURL("http://localhost:5173/");
     expect(await page.evaluate(() => JSON.stringify(localStorage))).toBe("{}");
 
