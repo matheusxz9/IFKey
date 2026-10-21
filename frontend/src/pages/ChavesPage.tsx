@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { listarChaves } from "../services/chaves";
 import {
   criarEmprestimo,
-  listarEmprestimos,
+  listarTodosEmprestimos,
   devolverEmprestimo,
 } from "../services/emprestimos";
 import { buscarSolicitante as buscarSolicitantePorId, buscarSolicitantePorMatricula } from "../services/solicitantes";
@@ -97,7 +97,7 @@ function ChavesPage() {
     try {
       setCarregandoEmprestimos(true);
       setErroEmprestimos("");
-      const resposta = await listarEmprestimos(
+      const resposta = await listarTodosEmprestimos(
         { status: "EMPRESTADA" },
         { signal: controller.signal },
       );

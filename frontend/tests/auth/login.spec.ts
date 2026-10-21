@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { API_URL, lerUsuarios, tokenDe } from "../fixtures/sessao";
-import { interceptarAuthorizeSuap, mockarTrocaDeCode } from "../fixtures/mock";
+import {
+  interceptarAuthorizeSuap,
+  mockarTrocaDeCode,
+  prepararStateOAuth,
+  urlCallback,
+} from "../fixtures/mock";
 
 /**
  * P0 — Autenticação via SUAP (OAuth2).
@@ -33,6 +38,7 @@ test("conclui o login pelo SUAP e persiste a sessão", async ({ page }) => {
     "http://localhost:5173/login/suap/callback",
   );
   expect(urlAutorizacao?.searchParams.get("client_id")).toBeTruthy();
+  expect(urlAutorizacao?.searchParams.get("state")).toBeTruthy();
 
   await expect(page).toHaveURL(/\/chaves$/);
   await expect(page.locator("aside").getByText("Matheus", { exact: true })).toBeVisible();
@@ -75,10 +81,28 @@ test("exibe estado de carregamento durante a troca do code", async ({ page }) =>
 });
 
 test("sem código de autorização mostra erro no callback", async ({ page }) => {
-  await page.goto("/login/suap/callback");
+  const state = await prepararStateOAuth(page);
+  await page.goto(urlCallback(undefined, state));
 
   await expect(page.getByRole("heading", { name: "Erro ao entrar" })).toBeVisible();
   await expect(page.getByText("Código de autenticação não encontrado.")).toBeVisible();
+});
+
+test("rejeita callback sem state OAuth", async ({ page }) => {
+  await page.goto("/login/suap/callback?code=code-e2e");
+
+  await expect(
+    page.getByText("Sessão de autenticação inválida. Tente entrar novamente."),
+  ).toBeVisible();
+});
+
+test("rejeita callback com state OAuth divergente", async ({ page }) => {
+  await prepararStateOAuth(page, "state-armazenado");
+  await page.goto(urlCallback("code-e2e", "state-diferente"));
+
+  await expect(
+    page.getByText("Sessão de autenticação inválida. Tente entrar novamente."),
+  ).toBeVisible();
 });
 
 test("mostra a mensagem da API quando o SUAP recusa o usuário", async ({ page }) => {
@@ -91,7 +115,8 @@ test("mostra a mensagem da API quando o SUAP recusa o usuário", async ({ page }
     },
   });
 
-  await page.goto("/login/suap/callback?code=code-invalido");
+  const state = await prepararStateOAuth(page);
+  await page.goto(urlCallback("code-invalido", state));
 
   await expect(page.getByRole("heading", { name: "Erro ao entrar" })).toBeVisible();
   await expect(
@@ -107,7 +132,8 @@ test("concatena a lista de erros de validação devolvida pela API", async ({ pa
     body: { statusCode: 400, message: ["Primeiro erro.", "Segundo erro."] },
   });
 
-  await page.goto("/login/suap/callback?code=code-invalido");
+  const state = await prepararStateOAuth(page);
+  await page.goto(urlCallback("code-invalido", state));
 
   await expect(page.getByText("Primeiro erro. Segundo erro.")).toBeVisible();
 });
@@ -117,7 +143,8 @@ test("informa falha de conexão quando o backend está indisponível", async ({
 }) => {
   await mockarTrocaDeCode(page, "erro-de-rede");
 
-  await page.goto("/login/suap/callback?code=code-e2e");
+  const state = await prepararStateOAuth(page);
+  await page.goto(urlCallback("code-e2e", state));
 
   await expect(
     page.getByText(
@@ -129,7 +156,8 @@ test("informa falha de conexão quando o backend está indisponível", async ({
 test("detecta resposta inesperada sem os tokens de sessão", async ({ page }) => {
   await mockarTrocaDeCode(page, { status: 200, body: { accessToken: "apenas-um" } });
 
-  await page.goto("/login/suap/callback?code=code-e2e");
+  const state = await prepararStateOAuth(page);
+  await page.goto(urlCallback("code-e2e", state));
 
   await expect(page.getByText("Resposta inválida do servidor de login.")).toBeVisible();
 });

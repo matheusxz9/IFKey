@@ -105,6 +105,37 @@ test.describe("como administrador", () => {
     }
   });
 
+  test("envia o período como ISO com offset", async ({ page }) => {
+    await page.route(`**${API_URL}/emprestimos/historico*`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: [],
+          meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
+        }),
+      }),
+    );
+
+    await page.goto("/historico");
+    await page.getByLabel("Data inicial").fill("2026-10-20");
+    await page.getByLabel("Data final").fill("2026-10-20");
+
+    const requisicao = page.waitForRequest((request) => {
+      const url = new URL(request.url());
+      return (
+        url.pathname.endsWith("/emprestimos/historico") &&
+        url.searchParams.has("de")
+      );
+    });
+
+    await page.getByRole("button", { name: "Pesquisar" }).click();
+    const url = new URL((await requisicao).url());
+
+    expect(url.searchParams.get("de")).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
+    expect(url.searchParams.get("ate")).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
+  });
+
   test("exibe a mensagem de erro quando a API falha", async ({ page }) => {
     await page.route(`**${API_URL}/emprestimos/historico*`, (route) =>
       route.fulfill({

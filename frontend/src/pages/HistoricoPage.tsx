@@ -13,6 +13,17 @@ import { Icone } from "../components/ui/Icone";
 import { Selo } from "../components/ui/Selo";
 import { formatarDataHora, pluralizar } from "../utils/formatacao";
 
+function paraIsoComOffset(valor: string, fimDoDia: boolean): string | undefined {
+  if (!valor) return undefined;
+
+  const data =
+    valor.length === 10
+      ? new Date(`${valor}T${fimDoDia ? "23:59:59.999" : "00:00:00"}`)
+      : new Date(valor);
+
+  return Number.isNaN(data.getTime()) ? undefined : data.toISOString();
+}
+
 const colunas: Coluna<Emprestimo>[] = [
   {
     key: "chave",
@@ -87,8 +98,8 @@ function HistoricoPage() {
       setErro("");
 
       const resposta = await listarHistoricoEmprestimos({
-        de: filtros.de ? `${filtros.de}T00:00:00` : undefined,
-        ate: filtros.ate ? `${filtros.ate}T23:59:59` : undefined,
+        de: filtros.de ? paraIsoComOffset(filtros.de, false) : undefined,
+        ate: filtros.ate ? paraIsoComOffset(filtros.ate, true) : undefined,
         solicitanteId: filtros.solicitanteId,
         page: paginaAtual,
         limit: 10,

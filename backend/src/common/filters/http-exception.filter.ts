@@ -16,6 +16,7 @@ const STATUS_NAMES: Record<number, string> = {
   [HttpStatus.FORBIDDEN]: 'Forbidden',
   [HttpStatus.NOT_FOUND]: 'Not Found',
   [HttpStatus.CONFLICT]: 'Conflict',
+  [HttpStatus.TOO_MANY_REQUESTS]: 'Too Many Requests',
   [HttpStatus.INTERNAL_SERVER_ERROR]: 'Internal Server Error',
 };
 
@@ -46,6 +47,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         code = CodigoErro.SEM_PERMISSAO;
       } else if (status === HttpStatus.NOT_FOUND) {
         code = CodigoErro.NAO_ENCONTRADO;
+      } else if (status === HttpStatus.TOO_MANY_REQUESTS) {
+        code = CodigoErro.LIMITE_REQUISICOES;
       } else {
         code = CodigoErro.VALIDACAO;
       }

@@ -62,6 +62,9 @@ jobs:
       - name: Testes unitários
         working-directory: backend
         run: npm test
+      - name: Rodar migrations
+        working-directory: backend
+        run: npm run migration:run
       - name: Testes e2e
         working-directory: backend
         run: npm run test:e2e
@@ -95,6 +98,9 @@ jobs:
       - name: Instalar dependências do backend
         working-directory: backend
         run: npm ci
+      - name: Rodar migrations
+        working-directory: backend
+        run: npm run migration:run
       - name: Popular o banco (seed)
         working-directory: backend
         run: npm run seed
@@ -107,9 +113,9 @@ jobs:
       - name: Lint
         working-directory: frontend
         run: npm run lint
-      - name: Verificação de tipos
+      - name: Build de produção
         working-directory: frontend
-        run: npx tsc -b
+        run: npm run build
       - name: Testes E2E (Playwright)
         working-directory: frontend
         run: npm run test:e2e

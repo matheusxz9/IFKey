@@ -1,13 +1,18 @@
 import { Botao } from "../components/ui/Botao";
 import logoIfkey from "../assets/logo-ifkey.png";
+import { CHAVE_STATE_OAUTH, gerarStateOAuth } from "../utils/oauth";
 
 function LoginPage() {
   function entrarComSuap() {
+    const state = gerarStateOAuth();
+    sessionStorage.setItem(CHAVE_STATE_OAUTH, state);
+
     const params = new URLSearchParams({
       client_id: import.meta.env.VITE_CLIENT_ID,
       response_type: "code",
       redirect_uri: import.meta.env.VITE_REDIRECT_URI,
       scope: "identificacao email",
+      state,
     });
 
     window.location.href = `https://suap.ifrn.edu.br/o/authorize/?${params.toString()}`;

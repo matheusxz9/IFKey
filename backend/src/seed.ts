@@ -10,7 +10,7 @@ import { PerfilAdministrador } from './common/enums/perfil-administrador.enum';
 async function seed() {
   await AppDataSource.initialize();
   await AppDataSource.query(
-    'TRUNCATE TABLE emprestimo, chave, solicitante, administrador RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE emprestimo, chave, solicitante, administrador, refresh_token RESTART IDENTITY CASCADE',
   );
   // Administradores
   const adminRepo = AppDataSource.getRepository(Administrador);

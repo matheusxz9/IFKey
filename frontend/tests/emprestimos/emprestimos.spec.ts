@@ -53,7 +53,7 @@ async function encerrarChave(api: APIRequestContext, codigo: string) {
 
   if (chave.status === "EMPRESTADA") {
     const emprestimos = await api.get(
-      caminhoApi("/emprestimos?status=EMPRESTADA"),
+      caminhoApi("/emprestimos?status=EMPRESTADA&limit=100"),
     );
     const lista = ((await emprestimos.json()) as { data: Array<{
       id: number;
@@ -240,6 +240,47 @@ test("avisa quando a chave foi emprestada por outra pessoa durante o preenchimen
     await expect(dialogo).toBeVisible();
   } finally {
     await encerrarChave(api, codigo);
+    await inativarSolicitante(api, solicitante.id);
+    await api.dispose();
+  }
+});
+
+test("exibe todos os empréstimos ativos, inclusive além da primeira página", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const api = await apiDe("admin");
+  const solicitante = await criarSolicitante(api);
+  const chaves: number[] = [];
+  const emprestimos: number[] = [];
+  const codigos: string[] = [];
+
+  try {
+    for (let indice = 0; indice < 21; indice += 1) {
+      const codigo = codigoChave(`ATV${indice}`);
+      const chave = await criarChave(api, { codigo });
+      chaves.push(chave.id);
+      codigos.push(codigo);
+      const emprestimo = await criarEmprestimo(api, {
+        solicitanteId: solicitante.id,
+        chaveId: chave.id,
+      });
+      emprestimos.push(emprestimo.id);
+    }
+
+    await page.goto("/chaves");
+    const ativos = secaoEmprestimosAtivos(page);
+
+    for (const codigo of codigos) {
+      await expect(ativos.getByText(codigo)).toBeVisible();
+    }
+  } finally {
+    for (const id of emprestimos) {
+      await devolverEmprestimo(api, id);
+    }
+    for (const id of chaves) {
+      await inativarChave(api, id);
+    }
     await inativarSolicitante(api, solicitante.id);
     await api.dispose();
   }

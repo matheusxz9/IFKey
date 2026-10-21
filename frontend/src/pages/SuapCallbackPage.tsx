@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth, type User } from "../contexts/AuthContext";
 import { Alerta } from "../components/ui/Alerta";
 import { TelaCarregando } from "../components/ui/Estado";
+import { CHAVE_STATE_OAUTH } from "../utils/oauth";
 import logoIfkey from "../assets/logo-ifkey.png";
 
 function SuapCallbackPage() {
@@ -17,6 +18,15 @@ function SuapCallbackPage() {
 
     async function autenticar() {
       const params = new URLSearchParams(window.location.search);
+      const state = params.get("state");
+      const stateArmazenado = sessionStorage.getItem(CHAVE_STATE_OAUTH);
+      sessionStorage.removeItem(CHAVE_STATE_OAUTH);
+
+      if (!state || !stateArmazenado || state !== stateArmazenado) {
+        setErro("Sessão de autenticação inválida. Tente entrar novamente.");
+        return;
+      }
+
       const code = params.get("code");
 
       if (!code) {

@@ -1,5 +1,8 @@
 import type { Page, Route } from "@playwright/test";
+import { CHAVE_STATE_OAUTH } from "../../src/utils/oauth";
 import { API_URL, BASE_URL } from "./sessao";
+
+export const STATE_OAUTH_E2E = "state-e2e";
 
 /**
  * Intercepta o redirecionamento OAuth do SUAP e devolve o usuário para o
@@ -11,14 +14,40 @@ export async function interceptarAuthorizeSuap(page: Page, codigo = "codigo-e2e"
     (url) => url.href.includes("suap.ifrn.edu.br/o/authorize"),
     async (route: Route) => {
       urlAutorizacao = new URL(route.request().url());
+      const params = new URLSearchParams({ code: codigo });
+      const state = urlAutorizacao.searchParams.get("state");
+      if (state) params.set("state", state);
+
       await route.fulfill({
         status: 302,
-        headers: { location: `${BASE_URL}/login/suap/callback?code=${codigo}` },
+        headers: {
+          location: `${BASE_URL}/login/suap/callback?${params.toString()}`,
+        },
         body: "",
       });
     },
   );
   return () => urlAutorizacao;
+}
+
+/** Deixa um state OAuth válido no sessionStorage antes do callback. */
+export async function prepararStateOAuth(
+  page: Page,
+  state = STATE_OAUTH_E2E,
+) {
+  await page.addInitScript(
+    ([chave, valor]) => sessionStorage.setItem(chave, valor),
+    [CHAVE_STATE_OAUTH, state] as const,
+  );
+  return state;
+}
+
+/** Monta a URL do callback com code/state controlados pelo teste. */
+export function urlCallback(codigo?: string, state = STATE_OAUTH_E2E) {
+  const params = new URLSearchParams();
+  if (codigo) params.set("code", codigo);
+  params.set("state", state);
+  return `/login/suap/callback?${params.toString()}`;
 }
 
 /** Responde a troca do code OAuth pelo backend (POST /auth/suap). */
