@@ -145,9 +145,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(parseUserFromStorage());
       setToken(localStorage.getItem("accessToken"));
     };
+    const sincronizarEntreAbas = (evento: StorageEvent) => {
+      if (
+        evento.key === null ||
+        evento.key === "accessToken" ||
+        evento.key === "refreshToken" ||
+        evento.key === "user"
+      ) {
+        sincronizarSessao();
+      }
+    };
+
     window.addEventListener(EVENTO_USUARIO_ATUALIZADO, sincronizarSessao);
-    return () =>
+    window.addEventListener("storage", sincronizarEntreAbas);
+    return () => {
       window.removeEventListener(EVENTO_USUARIO_ATUALIZADO, sincronizarSessao);
+      window.removeEventListener("storage", sincronizarEntreAbas);
+    };
   }, []);
 
   const roleHelpers = getRoleHelpers(user);

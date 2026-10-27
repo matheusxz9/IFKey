@@ -3,7 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import jwt from 'jsonwebtoken';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
 import { AppModule } from './../src/app.module';
 import { HttpExceptionFilter } from './../src/common/filters/http-exception.filter';
@@ -191,6 +191,129 @@ describe('Fluxos de negócio (e2e)', () => {
       .expect(200);
 
     await request(server).post('/api/auth/logout').send({}).expect(400);
+  });
+
+  it('rotaciona o refresh token e revoga a família ao detectar reutilização', async () => {
+    const dataSource = app.get(DataSource);
+    const refreshAntigo = `refresh-antigo-${randomUUID()}`;
+    const familia = randomUUID();
+    const hashAntigo = createHash('sha256').update(refreshAntigo).digest('hex');
+
+    await dataSource.query(
+      `INSERT INTO refresh_token ("tokenHash", "userId", "userType", "familyId", "expires_at")
+       VALUES ($1, 1, 'admin', $2, now() + interval '1 day')`,
+      [hashAntigo, familia],
+    );
+
+    const rotacao = await request(server)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: refreshAntigo })
+      .expect(200);
+    expect(rotacao.body.refreshToken).toEqual(expect.any(String));
+    expect(rotacao.body.refreshToken).not.toBe(refreshAntigo);
+
+    const hashNovo = createHash('sha256')
+      .update(rotacao.body.refreshToken as string)
+      .digest('hex');
+    const [novo] = await dataSource.query(
+      `SELECT "familyId", revoked FROM refresh_token WHERE "tokenHash" = $1`,
+      [hashNovo],
+    );
+    expect(novo).toMatchObject({ familyId: familia, revoked: false });
+
+    await dataSource.query(
+      `UPDATE refresh_token SET revoked_at = now() - interval '1 minute' WHERE "tokenHash" = $1`,
+      [hashAntigo],
+    );
+
+    const reuso = await request(server)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: refreshAntigo })
+      .expect(403);
+    expect(reuso.body).toMatchObject({
+      statusCode: 403,
+      code: 'REFRESH_TOKEN_REUTILIZADO',
+    });
+
+    const [revogados] = await dataSource.query(
+      `SELECT count(*)::int AS total FROM refresh_token WHERE "familyId" = $1 AND revoked = false`,
+      [familia],
+    );
+    expect(revogados.total).toBe(0);
+
+    await request(server)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: rotacao.body.refreshToken })
+      .expect(403);
+
+    const outraFamilia = `refresh-outra-familia-${randomUUID()}`;
+    await dataSource.query(
+      `INSERT INTO refresh_token ("tokenHash", "userId", "userType", "familyId", "expires_at")
+       VALUES ($1, 1, 'admin', $2, now() + interval '1 day')`,
+      [createHash('sha256').update(outraFamilia).digest('hex'), randomUUID()],
+    );
+    await request(server)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: outraFamilia })
+      .expect(200);
+  });
+
+  it('tolera renovação concorrente do mesmo refresh token dentro da janela de graça', async () => {
+    const dataSource = app.get(DataSource);
+    const refreshToken = `refresh-concorrente-${randomUUID()}`;
+    const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
+    await dataSource.query(
+      `INSERT INTO refresh_token ("tokenHash", "userId", "userType", "familyId", "expires_at")
+       VALUES ($1, 1, 'admin', $2, now() + interval '1 day')`,
+      [tokenHash, randomUUID()],
+    );
+
+    const [primeira, segunda] = await Promise.all([
+      request(server).post('/api/auth/refresh').send({ refreshToken }),
+      request(server).post('/api/auth/refresh').send({ refreshToken }),
+    ]);
+    const sucesso = [primeira, segunda].find((res) => res.status === 200);
+    const falha = [primeira, segunda].find((res) => res.status === 403);
+
+    expect(sucesso).toBeDefined();
+    expect(falha).toBeDefined();
+    expect(falha?.body).toMatchObject({ code: 'SEM_PERMISSAO' });
+
+    await request(server)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: sucesso!.body.refreshToken })
+      .expect(200);
+  });
+
+  it('faz logout de toda a família do refresh token apresentado', async () => {
+    const dataSource = app.get(DataSource);
+    const familia = randomUUID();
+    const tokenA = `logout-familia-a-${randomUUID()}`;
+    const tokenB = `logout-familia-b-${randomUUID()}`;
+
+    for (const token of [tokenA, tokenB]) {
+      await dataSource.query(
+        `INSERT INTO refresh_token ("tokenHash", "userId", "userType", "familyId", "expires_at")
+         VALUES ($1, 1, 'admin', $2, now() + interval '1 day')`,
+        [createHash('sha256').update(token).digest('hex'), familia],
+      );
+    }
+
+    await request(server)
+      .post('/api/auth/logout')
+      .send({ refreshToken: tokenA })
+      .expect(200);
+
+    await request(server)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: tokenB })
+      .expect(403);
+
+    const [ativos] = await dataSource.query(
+      `SELECT count(*)::int AS total FROM refresh_token WHERE "familyId" = $1 AND revoked = false`,
+      [familia],
+    );
+    expect(ativos.total).toBe(0);
   });
 
   it('rejeita matrícula duplicada (409 MATRICULA_DUPLICADA)', async () => {

@@ -2,7 +2,7 @@
 
 > **Status:** implementado — reflete a API atual
 > **Issue:** [#8 — Definir contrato de rotas da API](https://github.com/matheusxz9/IFKey/issues/8)
-> **Última atualização:** 2026-10-21
+> **Última atualização:** 2026-10-27
 >
 > Este documento define o contrato HTTP entre frontend e backend. A fonte viva é o
 > **Swagger** em `http://localhost:3000/docs`; mudanças no código devem ser refletidas aqui.
@@ -166,12 +166,17 @@ POST /auth/suap
 - O `login` do administrador corresponde ao usuário do SUAP (`identificacao`, normalmente a parte
   antes do `@`); `matricula` é o número retornado pelo SUAP.
 - `POST /auth/refresh` (público, `200 OK`) — body `{ "refreshToken": "<token>" }` → novo par
-  `{ accessToken, refreshToken, user }`. O refresh antigo é **revogado** a cada uso.
-  Token inválido/expirado → `403 SEM_PERMISSAO`; body ausente/inválido → `400 VALIDACAO`.
-- `POST /auth/logout` (público, `200 OK`) — body `{ "refreshToken": "<token>" }` → revoga o
-  token e devolve `{ "message": "Logout realizado com sucesso." }`. Não exige access token:
-  token desconhecido, já revogado ou expirado também retorna `200` (operação idempotente).
-  Body ausente/inválido → `400 VALIDACAO`.
+  `{ accessToken, refreshToken, user }`. O token é rotativo: o refresh apresentado é **revogado** e
+  o novo token pertence à mesma **família** de sessão. Token inválido/expirado →
+  `403 SEM_PERMISSAO`; body ausente/inválido → `400 VALIDACAO`.
+  - Reutilização de um token já rotacionado dentro de **10 segundos** é tratada como renovação
+    concorrente (abas simultâneas) e retorna `403 SEM_PERMISSAO` sem revogar a família.
+  - Reutilização após essa janela retorna `403 REFRESH_TOKEN_REUTILIZADO` e revoga todos os
+    refresh tokens ativos da família; o novo token dessa família também deixa de valer.
+- `POST /auth/logout` (público, `200 OK`) — body `{ "refreshToken": "<token>" }` → revoga a
+  **família** do token apresentado e devolve `{ "message": "Logout realizado com sucesso." }`.
+  Não exige access token: token desconhecido, já revogado ou expirado também retorna `200`
+  (operação idempotente). Body ausente/inválido → `400 VALIDACAO`.
 - `GET /auth/me` (autenticado):
   - admin → `{ "id": 1, "nome": "...", "login": "...", "perfil": "ADMINISTRADOR", "tipo": "admin" }`
   - solicitante → `{ "id": 5, "nome": "...", "matricula": "...", "perfil": "SOLICITANTE", "tipo": "solicitante" }`
@@ -405,7 +410,7 @@ Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `da
 | 204 | DELETE com sucesso |
 | 400 | Payload inválido (`VALIDACAO`) |
 | 401 | Token ausente/inválido ou usuário inativo (`NAO_AUTENTICADO`) |
-| 403 | Perfil sem permissão (`SEM_PERMISSAO`) |
+| 403 | Perfil sem permissão (`SEM_PERMISSAO`) ou refresh token reutilizado (`REFRESH_TOKEN_REUTILIZADO`) |
 | 404 | Recurso inexistente (`NAO_ENCONTRADO`) |
 | 409 | Conflito de estado/unicidade (ver `code` na §4) |
 | 429 | Limite de requisições por IP (`LIMITE_REQUISICOES`) |
@@ -414,6 +419,9 @@ Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `da
 Códigos `409` possíveis: `MATRICULA_DUPLICADA`, `CODIGO_CHAVE_DUPLICADO`, `LOGIN_DUPLICADO`,
 `IDENTIFICADOR_DUPLICADO`, `CHAVE_INDISPONIVEL`, `SOLICITANTE_INATIVO`, `EMPRESTIMO_JA_DEVOLVIDO`,
 `RECURSO_COM_EMPRESTIMO_ATIVO`, `ULTIMO_ADMINISTRADOR`.
+
+Códigos `403` possíveis: `SEM_PERMISSAO`, `REFRESH_TOKEN_REUTILIZADO` (reutilização de refresh
+token fora da janela de concorrência).
 
 ## 8. Mapeamento DER → API
 

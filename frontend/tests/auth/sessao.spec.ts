@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { apiComToken } from "../fixtures/api";
 import {
   API_URL,
@@ -214,5 +214,126 @@ test.describe("sessão", () => {
     await page.goto("/chaves");
 
     await expect(page).toHaveURL("http://localhost:5173/");
+  });
+
+  test("coordena a renovação entre duas abas concorrentes", async ({ context }) => {
+    const admin = lerUsuarios().admin;
+    const tokenRenovado = tokenDe(admin);
+    let renovacoes = 0;
+    let sucessos = 0;
+    let liberarRenovacao!: () => void;
+    const renovacaoLiberada = new Promise<void>((resolve) => {
+      liberarRenovacao = resolve;
+    });
+    const paginasQueSolicitaram = new Set<Page>();
+
+    await context.route(`${API_URL}/auth/refresh`, async (route) => {
+      renovacoes += 1;
+      const numero = renovacoes;
+      await renovacaoLiberada;
+
+      if (numero === 1) {
+        sucessos += 1;
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            accessToken: tokenRenovado,
+            refreshToken: "refresh-renovado-multitab",
+          }),
+        });
+      }
+
+      // Simula a janela de graça do backend: a segunda aba recebe o token
+      // antigo já revogado, mas a família não é revogada.
+      return route.fulfill({
+        status: 403,
+        contentType: "application/json",
+        body: JSON.stringify({
+          statusCode: 403,
+          message: "Refresh token inválido ou expirado.",
+          code: "SEM_PERMISSAO",
+        }),
+      });
+    });
+
+    await context.route(`${API_URL}/chaves*`, (route) => {
+      const autorizacao = route.request().headers()["authorization"];
+      if (autorizacao === `Bearer ${tokenRenovado}`) {
+        return route.continue();
+      }
+
+      const pagina = route.request().frame().page();
+      if (pagina) paginasQueSolicitaram.add(pagina);
+      return route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({
+          statusCode: 401,
+          message: "Token inválido.",
+          code: "NAO_AUTENTICADO",
+        }),
+      });
+    });
+
+    const paginaA = await context.newPage();
+    const paginaB = await context.newPage();
+    for (const pagina of [paginaA, paginaB]) {
+      await pagina.addInitScript(
+        ([tokenAntigo, refreshToken]) => {
+          if (sessionStorage.getItem("e2e-multitab")) return;
+          sessionStorage.setItem("e2e-multitab", "1");
+          localStorage.setItem("accessToken", tokenAntigo);
+          localStorage.setItem("refreshToken", refreshToken);
+        },
+        ["token-antigo", "refresh-compartilhado"] as const,
+      );
+    }
+
+    await Promise.all([paginaA.goto("/chaves"), paginaB.goto("/chaves")]);
+    await expect
+      .poll(() => paginasQueSolicitaram.size, { timeout: 10_000 })
+      .toBe(2);
+    await expect.poll(() => renovacoes > 0, { timeout: 10_000 }).toBe(true);
+
+    liberarRenovacao();
+
+    for (const pagina of [paginaA, paginaB]) {
+      await expect(pagina.getByRole("heading", { name: "Chaves" })).toBeVisible();
+      await expect(pagina).toHaveURL(/\/chaves$/);
+      expect(
+        await pagina.evaluate(() => localStorage.getItem("accessToken")),
+      ).toBe(tokenRenovado);
+      expect(
+        await pagina.evaluate(() => localStorage.getItem("refreshToken")),
+      ).toBe("refresh-renovado-multitab");
+    }
+    expect(sucessos).toBe(1);
+    expect(renovacoes).toBeGreaterThanOrEqual(1);
+    expect(renovacoes).toBeLessThanOrEqual(2);
+  });
+
+  test("logout em uma aba encerra a sessão nas outras", async ({ context }) => {
+    const paginaA = await context.newPage();
+    const paginaB = await context.newPage();
+
+    await Promise.all([paginaA.goto("/chaves"), paginaB.goto("/chaves")]);
+    await expect(
+      paginaA.getByRole("heading", { name: "Chaves" }),
+    ).toBeVisible();
+    await expect(
+      paginaB.getByRole("heading", { name: "Chaves" }),
+    ).toBeVisible();
+
+    await paginaA.getByRole("button", { name: "Sair" }).click();
+
+    for (const pagina of [paginaA, paginaB]) {
+      await expect(pagina).toHaveURL("http://localhost:5173/");
+      await expect(
+        pagina.getByRole("heading", {
+          name: "Acesso do Administrador / Solicitante",
+        }),
+      ).toBeVisible();
+    }
   });
 });

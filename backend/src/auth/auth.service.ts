@@ -1,13 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 import { SuapService, UsuarioSuap } from './suap.service';
 import { Administrador } from '../administradores/administrador.entity';
 import { Solicitante } from '../solicitantes/solicitante.entity';
 import { RefreshToken } from './refresh-token.entity';
-import { SemPermissaoException } from '../common/exceptions/app.exception';
+import {
+  RefreshTokenReutilizadoException,
+  SemPermissaoException,
+} from '../common/exceptions/app.exception';
 import { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
 
 export interface UsuarioAutenticado {
@@ -19,9 +22,22 @@ export interface UsuarioAutenticado {
   tipo: 'admin' | 'solicitante';
 }
 
+interface UsuarioParaToken {
+  id: number;
+  nome: string;
+  login: string;
+  perfil: string;
+  tipo: 'admin' | 'solicitante';
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+
+  // Evita revogar a família quando duas renovações válidas chegam quase juntas
+  // (por exemplo, abas concorrentes). Fora da janela, a reutilização indica
+  // vazamento do token.
+  private static readonly REFRESH_REUSE_GRACE_MS = 10_000;
 
   constructor(
     private readonly suapService: SuapService,
@@ -116,6 +132,8 @@ export class AuthService {
     perfil: string,
     userType: 'admin' | 'solicitante',
     nome?: string,
+    familyId: string = crypto.randomUUID(),
+    manager?: EntityManager,
   ) {
     const accessToken = await this.jwtService.signAsync(
       { sub: userId, login, perfil },
@@ -125,11 +143,15 @@ export class AuthService {
     const refreshToken = this.generateRefreshToken();
     const refreshTokenHash = this.hashToken(refreshToken);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const refreshTokenRepo = manager
+      ? manager.getRepository(RefreshToken)
+      : this.refreshTokenRepo;
 
-    await this.refreshTokenRepo.save({
+    await refreshTokenRepo.save({
       tokenHash: refreshTokenHash,
       userId,
       userType,
+      familyId,
       expiresAt,
     });
 
@@ -149,55 +171,120 @@ export class AuthService {
 
   async refreshTokens(refreshToken: string) {
     const tokenHash = this.hashToken(refreshToken);
-    const stored = await this.refreshTokenRepo.findOne({
-      where: { tokenHash, revoked: false },
-    });
+    const estado: { motivo: 'invalido' | 'reutilizado' | 'inativo' } = {
+      motivo: 'invalido',
+    };
 
-    if (!stored || stored.expiresAt < new Date()) {
-      throw new SemPermissaoException('Refresh token inválido ou expirado.');
+    const tokens = await this.refreshTokenRepo.manager.transaction(
+      async (manager) => {
+        const repo = manager.getRepository(RefreshToken);
+        const stored = await repo.findOne({
+          where: { tokenHash },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        if (!stored) return null;
+
+        if (stored.revoked) {
+          const revokedAt = stored.revokedAt?.getTime() ?? 0;
+          const dentroDaJanela =
+            Date.now() - revokedAt < AuthService.REFRESH_REUSE_GRACE_MS;
+
+          if (!dentroDaJanela) {
+            estado.motivo = 'reutilizado';
+            await this.revogarFamilia(manager, stored.familyId);
+          }
+          return null;
+        }
+
+        if (stored.expiresAt < new Date()) return null;
+
+        const usuario = await this.buscarUsuarioAtivo(manager, stored);
+        if (!usuario) {
+          estado.motivo = 'inativo';
+          await this.revogarFamilia(manager, stored.familyId);
+          return null;
+        }
+
+        stored.revoked = true;
+        stored.revokedAt = new Date();
+        await repo.save(stored);
+
+        return this.generateTokens(
+          usuario.id,
+          usuario.login,
+          usuario.perfil,
+          usuario.tipo,
+          usuario.nome,
+          stored.familyId,
+          manager,
+        );
+      },
+    );
+
+    if (tokens) return tokens;
+
+    if (estado.motivo === 'reutilizado') {
+      throw new RefreshTokenReutilizadoException();
     }
+    if (estado.motivo === 'inativo') {
+      throw new SemPermissaoException('Usuário não encontrado.');
+    }
+    throw new SemPermissaoException('Refresh token inválido ou expirado.');
+  }
 
-    // Revoke old token
-    stored.revoked = true;
-    stored.revokedAt = new Date();
-    await this.refreshTokenRepo.save(stored);
-
-    // Generate new tokens
+  private async buscarUsuarioAtivo(
+    manager: EntityManager,
+    stored: RefreshToken,
+  ): Promise<UsuarioParaToken | null> {
     if (stored.userType === 'admin') {
-      const admin = await this.adminRepo.findOne({
-        where: { id: stored.userId, ativo: true },
-      });
-      if (!admin) {
-        throw new SemPermissaoException('Administrador não encontrado.');
-      }
-      return this.generateTokens(
-        admin.id,
-        admin.login,
-        admin.perfil,
-        'admin',
-        admin.nome,
-      );
-    } else {
-      const solicitante = await this.solicitanteRepo.findOne({
-        where: { id: stored.userId, ativo: true },
-      });
-      if (!solicitante) {
-        throw new SemPermissaoException('Solicitante não encontrado.');
-      }
-      return this.generateTokens(
-        solicitante.id,
-        solicitante.matricula,
-        PerfilAdministrador.SOLICITANTE,
-        'solicitante',
-        solicitante.nome,
-      );
+      const admin = await manager
+        .getRepository(Administrador)
+        .findOne({ where: { id: stored.userId, ativo: true } });
+      if (!admin) return null;
+      return {
+        id: admin.id,
+        nome: admin.nome,
+        login: admin.login,
+        perfil: admin.perfil,
+        tipo: 'admin',
+      };
     }
+
+    const solicitante = await manager
+      .getRepository(Solicitante)
+      .findOne({ where: { id: stored.userId, ativo: true } });
+    if (!solicitante) return null;
+    return {
+      id: solicitante.id,
+      nome: solicitante.nome,
+      login: solicitante.matricula,
+      perfil: PerfilAdministrador.SOLICITANTE,
+      tipo: 'solicitante',
+    };
+  }
+
+  private async revogarFamilia(
+    manager: EntityManager,
+    familyId: string,
+  ): Promise<void> {
+    await manager
+      .getRepository(RefreshToken)
+      .update(
+        { familyId, revoked: false },
+        { revoked: true, revokedAt: new Date() },
+      );
   }
 
   async revokeRefreshToken(refreshToken: string) {
     const tokenHash = this.hashToken(refreshToken);
+    const stored = await this.refreshTokenRepo.findOne({
+      where: { tokenHash },
+    });
+    if (!stored) return;
+
     await this.refreshTokenRepo.update(
-      { tokenHash },
+      { familyId: stored.familyId, revoked: false },
       { revoked: true, revokedAt: new Date() },
     );
   }

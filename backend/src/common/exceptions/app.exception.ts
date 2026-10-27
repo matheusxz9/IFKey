@@ -81,3 +81,11 @@ export class SemPermissaoException extends AppException {
     super(message, HttpStatus.FORBIDDEN, CodigoErro.SEM_PERMISSAO);
   }
 }
+
+export class RefreshTokenReutilizadoException extends AppException {
+  constructor(
+    message = 'Refresh token reutilizado. A sessão foi encerrada por segurança.',
+  ) {
+    super(message, HttpStatus.FORBIDDEN, CodigoErro.REFRESH_TOKEN_REUTILIZADO);
+  }
+}

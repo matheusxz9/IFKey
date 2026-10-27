@@ -2,10 +2,14 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
 @Entity('refresh_token')
+@Index('UQ_refresh_token_tokenHash', ['tokenHash'], { unique: true })
+@Index('IDX_refresh_token_user', ['userId', 'userType'])
+@Index('IDX_refresh_token_family', ['familyId'])
 export class RefreshToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -19,7 +23,14 @@ export class RefreshToken {
   @Column({ length: 20 })
   userType: string; // 'admin' | 'solicitante'
 
-  @CreateDateColumn({ name: 'created_at' })
+  @Column({
+    name: 'familyId',
+    type: 'uuid',
+    default: () => 'gen_random_uuid()',
+  })
+  familyId: string;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
   @Column({ name: 'expires_at', type: 'timestamptz' })

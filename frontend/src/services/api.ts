@@ -49,19 +49,101 @@ function encerrarSessao(): never {
 
 let refreshPromise: Promise<string> | null = null;
 
-async function solicitarRenovacao(): Promise<string> {
+const BLOQUEIO_RENOVACAO = "ifkey:renovacao-sessao";
+const ESPERA_PROPAGACAO_SESSAO_MS = 100;
+const ESPERA_RENOVACAO_CONCORRENTE_MS = 1_000;
+
+function comBloqueioRenovacao<T>(callback: () => Promise<T>): Promise<T> {
+  if (typeof navigator === "undefined" || !navigator.locks) {
+    return callback();
+  }
+  return navigator.locks.request(BLOQUEIO_RENOVACAO, callback);
+}
+
+function lerAccessTokenAtualizado(tokenAnterior: string | null): string | null {
+  const atual = localStorage.getItem("accessToken");
+  return atual && atual !== tokenAnterior ? atual : null;
+}
+
+function aguardarTokenAtualizado(
+  tokenAnterior: string | null,
+  tempoLimiteMs: number,
+): Promise<string | null> {
+  const atual = lerAccessTokenAtualizado(tokenAnterior);
+  if (atual) return Promise.resolve(atual);
+
+  return new Promise((resolve) => {
+    function finalizar(token: string | null) {
+      window.removeEventListener("storage", aoReceberStorage);
+      window.clearInterval(intervalo);
+      window.clearTimeout(tempoLimite);
+      resolve(token);
+    }
+
+    function verificar() {
+      const token = lerAccessTokenAtualizado(tokenAnterior);
+      if (token) finalizar(token);
+    }
+
+    function aoReceberStorage(evento: StorageEvent) {
+      if (evento.key === "accessToken" || evento.key === null) verificar();
+    }
+
+    const intervalo = window.setInterval(verificar, 20);
+    const tempoLimite = window.setTimeout(() => finalizar(null), tempoLimiteMs);
+    window.addEventListener("storage", aoReceberStorage);
+  });
+}
+
+async function solicitarRenovacao(tokenAnterior: string | null): Promise<string> {
+  const accessTokenAtual = lerAccessTokenAtualizado(tokenAnterior);
+  if (accessTokenAtual) return accessTokenAtual;
+
+  if (!localStorage.getItem("accessToken") && tokenAnterior) {
+    throw new Error("Sessão encerrada em outra aba");
+  }
+
+  // O Firefox propaga o localStorage entre abas de forma assíncrona. Esperar
+  // um pouco evita renovar de novo logo após outra aba concluir a renovação.
+  const tokenDeOutraAba = await aguardarTokenAtualizado(
+    tokenAnterior,
+    ESPERA_PROPAGACAO_SESSAO_MS,
+  );
+  if (tokenDeOutraAba) return tokenDeOutraAba;
+
   const refreshToken = localStorage.getItem("refreshToken");
   if (!refreshToken) {
     throw new Error("Refresh token não encontrado");
   }
 
-  const resposta = await fetch(`${API_URL}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken }),
-  });
+  let resposta: Response;
+  try {
+    resposta = await fetch(`${API_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+  } catch (erro) {
+    const token = await aguardarTokenAtualizado(
+      tokenAnterior,
+      ESPERA_RENOVACAO_CONCORRENTE_MS,
+    );
+    if (token) return token;
+    throw erro;
+  }
 
   if (!resposta.ok) {
+    const erro = (await resposta.json().catch(() => null)) as CorpoErro | null;
+
+    // Em uma corrida entre abas, outra pode ter gravado os tokens novos. Só
+    // encerra a sessão se a família não tiver sido revogada por segurança.
+    if (erro?.code !== "REFRESH_TOKEN_REUTILIZADO") {
+      const token = await aguardarTokenAtualizado(
+        tokenAnterior,
+        ESPERA_RENOVACAO_CONCORRENTE_MS,
+      );
+      if (token) return token;
+    }
     throw new Error("Falha ao renovar token");
   }
 
@@ -87,11 +169,13 @@ async function solicitarRenovacao(): Promise<string> {
   return dados.accessToken;
 }
 
-function refreshAccessToken(): Promise<string> {
+function refreshAccessToken(tokenAnterior: string | null = null): Promise<string> {
   if (!refreshPromise) {
-    refreshPromise = solicitarRenovacao().finally(() => {
-      refreshPromise = null;
-    });
+    refreshPromise = comBloqueioRenovacao(() => solicitarRenovacao(tokenAnterior)).finally(
+      () => {
+        refreshPromise = null;
+      },
+    );
   }
   return refreshPromise;
 }
@@ -145,7 +229,7 @@ export async function apiFetch<T = unknown>(
   // requisição original. O refresh compartilhado evita rajadas na mesma aba.
   if (resposta.status === 401 && needsAuth) {
     try {
-      token = await refreshAccessToken();
+      token = await refreshAccessToken(token);
     } catch {
       encerrarSessao();
     }
