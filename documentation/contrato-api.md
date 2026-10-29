@@ -175,6 +175,8 @@ POST /auth/suap
     refresh tokens ativos da família; o novo token dessa família também deixa de valer.
 - `POST /auth/logout` (público, `200 OK`) — body `{ "refreshToken": "<token>" }` → revoga a
   **família** do token apresentado e devolve `{ "message": "Logout realizado com sucesso." }`.
+  O logout é serializado com renovações concorrentes da mesma família: um token criado por uma
+  rotação em andamento também é revogado.
   Não exige access token: token desconhecido, já revogado ou expirado também retorna `200`
   (operação idempotente). Body ausente/inválido → `400 VALIDACAO`.
 - `GET /auth/me` (autenticado):

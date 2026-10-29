@@ -143,6 +143,57 @@ test.describe("sessão", () => {
     ).toContain('"matheus"');
   });
 
+  test("sem usuário salvo e com access expirado, renova antes de recuperar o perfil", async ({
+    page,
+  }) => {
+    const admin = lerUsuarios().admin;
+    const tokenRenovado = tokenDe(admin);
+    let renovacoes = 0;
+
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("e2e-me-expirado")) return;
+      sessionStorage.setItem("e2e-me-expirado", "1");
+      localStorage.setItem("accessToken", "token-expirado");
+      localStorage.setItem("refreshToken", "refresh-valido");
+      localStorage.removeItem("user");
+    });
+
+    await page.route(`${API_URL}/auth/refresh`, (route) => {
+      renovacoes += 1;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          accessToken: tokenRenovado,
+          refreshToken: "refresh-renovado",
+        }),
+      });
+    });
+    await page.route(`${API_URL}/auth/me`, (route) => {
+      if (route.request().headers()["authorization"] === `Bearer ${tokenRenovado}`) {
+        return route.continue();
+      }
+      return route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({
+          statusCode: 401,
+          message: "Token inválido.",
+          code: "NAO_AUTENTICADO",
+        }),
+      });
+    });
+
+    await page.goto("/chaves");
+
+    await expect(page.locator("aside").getByText("Matheus", { exact: true })).toBeVisible();
+    await expect.poll(() => renovacoes, { timeout: 10_000 }).toBeGreaterThanOrEqual(1);
+    expect(await page.evaluate(() => localStorage.getItem("refreshToken"))).toBe(
+      "refresh-renovado",
+    );
+    expect(await page.evaluate(() => localStorage.getItem("user"))).toContain('"matheus"');
+  });
+
   test("logout revoga o refresh token, limpa o storage e devolve para o login", async ({
     page,
   }) => {
@@ -174,6 +225,77 @@ test.describe("sessão", () => {
     await expect(page).toHaveURL("http://localhost:5173/");
   });
 
+  test("logout durante a renovação não restaura a sessão", async ({ page }) => {
+    const admin = lerUsuarios().admin;
+    const tokenRenovado = tokenDe(admin);
+
+    await page.addInitScript((usuario) => {
+      if (sessionStorage.getItem("e2e-logout-renovacao")) return;
+      sessionStorage.setItem("e2e-logout-renovacao", "1");
+      localStorage.setItem("accessToken", "token-expirado");
+      localStorage.setItem("refreshToken", "refresh-valido");
+      localStorage.setItem("user", usuario);
+    }, JSON.stringify(admin));
+
+    let liberarRenovacao!: () => void;
+    const renovacaoLiberada = new Promise<void>((resolve) => {
+      liberarRenovacao = resolve;
+    });
+    let iniciarRenovacao!: () => void;
+    const renovacaoIniciada = new Promise<void>((resolve) => {
+      iniciarRenovacao = resolve;
+    });
+    let tokenRenovadoDisponivel = false;
+
+    await page.route(`${API_URL}/auth/refresh`, async (route) => {
+      iniciarRenovacao();
+      await renovacaoLiberada;
+      tokenRenovadoDisponivel = true;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          accessToken: tokenRenovado,
+          refreshToken: "refresh-renovado",
+          user: admin,
+        }),
+      });
+    });
+    await page.route(`${API_URL}/chaves*`, (route) => {
+      if (tokenRenovadoDisponivel) return route.continue();
+      return route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({
+          statusCode: 401,
+          message: "Token inválido.",
+          code: "NAO_AUTENTICADO",
+        }),
+      });
+    });
+    await page.route(`${API_URL}/auth/logout`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "Logout realizado com sucesso." }),
+      }),
+    );
+
+    await page.goto("/chaves");
+    await expect(page.getByRole("button", { name: "Sair" })).toBeVisible();
+    await renovacaoIniciada;
+
+    await page.getByRole("button", { name: "Sair" }).click();
+    await expect(page).toHaveURL("http://localhost:5173/");
+
+    liberarRenovacao();
+
+    // A resposta chega depois do logout e não pode gravar os tokens de volta.
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => JSON.stringify(localStorage))).toBe("{}");
+    await expect(page).toHaveURL("http://localhost:5173/");
+  });
+
   // Regressão (bug corrigido): o token expirado agora leva o usuário de volta
   // para o login — apiFetch trata a falha de refresh como sessão expirada,
   // limpa o storage e redireciona.
@@ -193,6 +315,11 @@ test.describe("sessão", () => {
     await page.goto("/chaves");
 
     await expect(page).toHaveURL("http://localhost:5173/");
+    // O redirecionamento é uma navegação completa; espera a nova página antes
+    // de ler o storage para não avaliar durante a troca de contexto.
+    await expect(
+      page.getByRole("heading", { name: "Acesso do Administrador / Solicitante" }),
+    ).toBeVisible();
     expect(await page.evaluate(() => localStorage.getItem("accessToken"))).toBeNull();
   });
 

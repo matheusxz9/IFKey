@@ -178,6 +178,11 @@ export class AuthService {
     const tokens = await this.refreshTokenRepo.manager.transaction(
       async (manager) => {
         const repo = manager.getRepository(RefreshToken);
+        const localizado = await repo.findOne({ where: { tokenHash } });
+        if (!localizado) return null;
+
+        await this.bloquearFamilia(manager, localizado.familyId);
+
         const stored = await repo.findOne({
           where: { tokenHash },
           lock: { mode: 'pessimistic_write' },
@@ -276,17 +281,29 @@ export class AuthService {
       );
   }
 
+  // Serializa rotação e logout da mesma família. Sem isso, um logout
+  // concorrente com a rotação pode não enxergar o token recém-criado e deixar
+  // a família ativa.
+  private async bloquearFamilia(
+    manager: EntityManager,
+    familyId: string,
+  ): Promise<void> {
+    await manager.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
+      [familyId],
+    );
+  }
+
   async revokeRefreshToken(refreshToken: string) {
     const tokenHash = this.hashToken(refreshToken);
-    const stored = await this.refreshTokenRepo.findOne({
-      where: { tokenHash },
-    });
-    if (!stored) return;
+    await this.refreshTokenRepo.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(RefreshToken);
+      const stored = await repo.findOne({ where: { tokenHash } });
+      if (!stored) return;
 
-    await this.refreshTokenRepo.update(
-      { familyId: stored.familyId, revoked: false },
-      { revoked: true, revokedAt: new Date() },
-    );
+      await this.bloquearFamilia(manager, stored.familyId);
+      await this.revogarFamilia(manager, stored.familyId);
+    });
   }
 
   async perfil(userId: number, perfil: string): Promise<UsuarioAutenticado> {

@@ -32,7 +32,10 @@ function normalizarMensagem(message: string | string[] | undefined): string {
   return message || "Ocorreu um erro na requisição.";
 }
 
-function limparSessao(): void {
+let versaoSessao = 0;
+
+export function limparSessao(): void {
+  versaoSessao += 1;
   localStorage.removeItem("accessToken");
   localStorage.removeItem("refreshToken");
   localStorage.removeItem("user");
@@ -96,6 +99,7 @@ function aguardarTokenAtualizado(
 }
 
 async function solicitarRenovacao(tokenAnterior: string | null): Promise<string> {
+  const versao = versaoSessao;
   const accessTokenAtual = lerAccessTokenAtualizado(tokenAnterior);
   if (accessTokenAtual) return accessTokenAtual;
 
@@ -155,6 +159,18 @@ async function solicitarRenovacao(tokenAnterior: string | null): Promise<string>
 
   if (!dados.accessToken || !dados.refreshToken) {
     throw new Error("Resposta inválida ao renovar token");
+  }
+
+  // Um logout (nesta aba ou em outra) pode ter acontecido enquanto a resposta
+  // estava a caminho. Nesse caso os tokens novos não devem ressuscitar a
+  // sessão; se já houver outra sessão válida, apenas a reutiliza.
+  if (
+    versao !== versaoSessao ||
+    localStorage.getItem("refreshToken") !== refreshToken
+  ) {
+    const tokenAtual = localStorage.getItem("accessToken");
+    if (tokenAtual) return tokenAtual;
+    throw new Error("Sessão encerrada durante a renovação");
   }
 
   localStorage.setItem("accessToken", dados.accessToken);

@@ -1,5 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-import API_URL, { EVENTO_USUARIO_ATUALIZADO } from "../services/api";
+import API_URL, {
+  apiFetch,
+  EVENTO_USUARIO_ATUALIZADO,
+  limparSessao,
+} from "../services/api";
 
 export type Perfil = "ADMINISTRADOR" | "GESTOR" | "SOLICITANTE";
 
@@ -85,9 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setToken(null);
     setUser(null);
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("user");
+    limparSessao();
 
     if (!refreshToken) return;
 
@@ -115,18 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function carregarUsuario() {
       try {
-        const API_URL = import.meta.env.VITE_API_URL;
-        const resposta = await fetch(`${API_URL}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const dados = await apiFetch<User>("/auth/me", {
           signal: controller.signal,
         });
-
-        if (!resposta.ok) {
-          logout();
-          return;
-        }
-
-        const dados = (await resposta.json()) as User;
         setUser(dados);
         localStorage.setItem("user", JSON.stringify(dados));
       } catch (err) {

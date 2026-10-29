@@ -316,6 +316,99 @@ describe('Fluxos de negócio (e2e)', () => {
     expect(ativos.total).toBe(0);
   });
 
+  it('revoga o token criado por rotação concorrente com o logout', async () => {
+    const dataSource = app.get(DataSource);
+    const familia = randomUUID();
+    const refreshAntigo = `logout-rotacao-${randomUUID()}`;
+    const refreshNovo = `logout-rotacao-novo-${randomUUID()}`;
+    const hashAntigo = createHash('sha256').update(refreshAntigo).digest('hex');
+    const hashNovo = createHash('sha256').update(refreshNovo).digest('hex');
+
+    await dataSource.query(
+      `INSERT INTO refresh_token ("tokenHash", "userId", "userType", "familyId", "expires_at")
+       VALUES ($1, 1, 'admin', $2, now() + interval '1 day')`,
+      [hashAntigo, familia],
+    );
+
+    const runner = dataSource.createQueryRunner();
+    await runner.connect();
+    await runner.startTransaction();
+
+    const logout = request(server)
+      .post('/api/auth/logout')
+      .send({ refreshToken: refreshAntigo })
+      .then((resposta) => resposta);
+
+    let bloqueado = false;
+    let statusLogout = 0;
+    try {
+      await runner.query(
+        'SELECT 1 FROM refresh_token WHERE "tokenHash" = $1 FOR UPDATE',
+        [hashAntigo],
+      );
+      await runner.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
+        [familia],
+      );
+      const [transacao] = await runner.query(
+        'SELECT txid_current()::text AS txid',
+      );
+
+      // Espera o logout ficar bloqueado (na família ou na linha da rotação)
+      // antes de simular a rotação que cria o token novo.
+      for (let tentativa = 0; tentativa < 200 && !bloqueado; tentativa += 1) {
+        const [linha] = await dataSource.query(
+          `SELECT count(*)::int AS total
+             FROM pg_locks
+            WHERE NOT granted
+              AND (
+                (
+                  locktype = 'advisory'
+                  AND ((classid::bigint << 32) | objid::bigint) =
+                      hashtextextended($1::text, 0)
+                )
+                OR (
+                  locktype = 'transactionid'
+                  AND transactionid::text = $2
+                )
+              )`,
+          [familia, transacao.txid],
+        );
+        bloqueado = linha.total > 0;
+        if (!bloqueado) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      }
+
+      if (bloqueado) {
+        await runner.query(
+          `UPDATE refresh_token SET revoked = true, revoked_at = now() WHERE "tokenHash" = $1`,
+          [hashAntigo],
+        );
+        await runner.query(
+          `INSERT INTO refresh_token ("tokenHash", "userId", "userType", "familyId", "expires_at")
+           VALUES ($1, 1, 'admin', $2, now() + interval '1 day')`,
+          [hashNovo, familia],
+        );
+      }
+
+      if (runner.isTransactionActive) await runner.commitTransaction();
+    } finally {
+      if (runner.isTransactionActive) await runner.rollbackTransaction();
+      await runner.release();
+      statusLogout = (await logout).status;
+    }
+
+    expect(bloqueado).toBe(true);
+    expect(statusLogout).toBe(200);
+
+    const [ativos] = await dataSource.query(
+      `SELECT count(*)::int AS total FROM refresh_token WHERE "familyId" = $1 AND revoked = false`,
+      [familia],
+    );
+    expect(ativos.total).toBe(0);
+  });
+
   it('rejeita matrícula duplicada (409 MATRICULA_DUPLICADA)', async () => {
     const res = await request(server)
       .post('/api/solicitantes')
