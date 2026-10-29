@@ -104,11 +104,15 @@ test.describe("com sessão", () => {
     await page.goto("/chaves");
 
     await expect(page.getByRole("heading", { name: "Chaves" })).toBeVisible();
+    await expect
+      .poll(() => renovacoes, { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(1);
     await expect(page.getByRole("table").first()).toBeVisible();
-    expect(renovacoes).toBeGreaterThanOrEqual(1);
-    expect(await page.evaluate(() => localStorage.getItem("accessToken"))).toBe(
-      tokenRenovado,
-    );
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("accessToken")), {
+        timeout: 10_000,
+      })
+      .toBe(tokenRenovado);
     expect(await page.evaluate(() => localStorage.getItem("refreshToken"))).toBe(
       "refresh-renovado",
     );
