@@ -409,6 +409,48 @@ describe('Fluxos de negócio (e2e)', () => {
     expect(ativos.total).toBe(0);
   });
 
+  it('remove tokens expirados da família ao rotacionar e ao fazer logout', async () => {
+    const dataSource = app.get(DataSource);
+    const familia = randomUUID();
+    const expirado = `limpeza-expirado-${randomUUID()}`;
+    const valido = `limpeza-valido-${randomUUID()}`;
+
+    const inserir = (token: string, expiracao: string) =>
+      dataSource.query(
+        `INSERT INTO refresh_token ("tokenHash", "userId", "userType", "familyId", "expires_at")
+         VALUES ($1, 1, 'admin', $2, now() + $3::interval)`,
+        [createHash('sha256').update(token).digest('hex'), familia, expiracao],
+      );
+
+    await inserir(expirado, '-1 day');
+    await inserir(valido, '1 day');
+
+    const rotacao = await request(server)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: valido })
+      .expect(200);
+
+    const [expirados] = await dataSource.query(
+      `SELECT count(*)::int AS total FROM refresh_token WHERE "tokenHash" = $1`,
+      [createHash('sha256').update(expirado).digest('hex')],
+    );
+    expect(expirados.total).toBe(0);
+
+    const expiradoNoLogout = `limpeza-logout-${randomUUID()}`;
+    await inserir(expiradoNoLogout, '-1 day');
+
+    await request(server)
+      .post('/api/auth/logout')
+      .send({ refreshToken: rotacao.body.refreshToken })
+      .expect(200);
+
+    const [restante] = await dataSource.query(
+      `SELECT count(*)::int AS total FROM refresh_token WHERE "tokenHash" = $1`,
+      [createHash('sha256').update(expiradoNoLogout).digest('hex')],
+    );
+    expect(restante.total).toBe(0);
+  });
+
   it('rejeita matrícula duplicada (409 MATRICULA_DUPLICADA)', async () => {
     const res = await request(server)
       .post('/api/solicitantes')

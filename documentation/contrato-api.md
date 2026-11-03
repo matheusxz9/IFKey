@@ -139,7 +139,7 @@ Excesso de requisições (`@nestjs/throttler`), HTTP 429:
 
 O `ADMINISTRADOR` **não possui senha**; o login é feito pelo SUAP (OAuth2). O backend troca o
 `code` recebido no callback por um **access token** (JWT, 15 min) e um **refresh token** opaco
-(7 dias, rotativo).
+(7 dias, rotativo — cada rotação renova o prazo).
 
 ```
 POST /auth/suap

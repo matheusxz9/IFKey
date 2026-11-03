@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, Repository } from 'typeorm';
+import { EntityManager, In, LessThan, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 import { SuapService, UsuarioSuap } from './suap.service';
@@ -214,6 +214,7 @@ export class AuthService {
         stored.revoked = true;
         stored.revokedAt = new Date();
         await repo.save(stored);
+        await this.limparTokensExpirados(manager, stored.familyId);
 
         return this.generateTokens(
           usuario.id,
@@ -281,6 +282,15 @@ export class AuthService {
       );
   }
 
+  private async limparTokensExpirados(
+    manager: EntityManager,
+    familyId: string,
+  ): Promise<void> {
+    await manager
+      .getRepository(RefreshToken)
+      .delete({ familyId, expiresAt: LessThan(new Date()) });
+  }
+
   // Serializa rotação e logout da mesma família. Sem isso, um logout
   // concorrente com a rotação pode não enxergar o token recém-criado e deixar
   // a família ativa.
@@ -303,6 +313,7 @@ export class AuthService {
 
       await this.bloquearFamilia(manager, stored.familyId);
       await this.revogarFamilia(manager, stored.familyId);
+      await this.limparTokensExpirados(manager, stored.familyId);
     });
   }
 
