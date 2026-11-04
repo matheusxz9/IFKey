@@ -23,7 +23,7 @@ export class Solicitante {
   matricula: string;
 
   @Column({ length: 120, nullable: true })
-  contato: string;
+  contato: string | null;
 
   @Column({ default: true })
   ativo: boolean;

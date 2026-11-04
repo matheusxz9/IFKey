@@ -32,6 +32,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  app.useBodyParser('json', { limit: '2mb' });
 
   await app.listen(configService.get<number>('PORT') ?? 3000);
 }
