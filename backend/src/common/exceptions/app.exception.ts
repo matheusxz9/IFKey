@@ -82,6 +82,12 @@ export class SemPermissaoException extends AppException {
   }
 }
 
+export class ImportacaoInvalidaException extends AppException {
+  constructor(message: string) {
+    super(message, HttpStatus.BAD_REQUEST, CodigoErro.VALIDACAO);
+  }
+}
+
 export class RefreshTokenReutilizadoException extends AppException {
   constructor(
     message = 'Refresh token reutilizado. A sessão foi encerrada por segurança.',
