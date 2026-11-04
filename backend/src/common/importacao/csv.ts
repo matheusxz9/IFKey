@@ -23,11 +23,6 @@ export interface RegistroCsv {
   erro?: string;
 }
 
-interface RegistroBruto {
-  record: string[];
-  info: { lines: number };
-}
-
 export function normalizarCabecalho(valor: string): string {
   return valor
     .trim()
@@ -73,7 +68,7 @@ export function lerCsv(
   const primeiraLinha = texto.split(/\r?\n/, 1)[0] ?? '';
   const delimiter = detectarDelimitador(primeiraLinha);
 
-  let registrosBrutos: RegistroBruto[];
+  let registrosBrutos: { record: string[]; info: { lines: number } }[];
   try {
     registrosBrutos = parse(texto, {
       bom: true,
@@ -82,7 +77,7 @@ export function lerCsv(
       skip_empty_lines: false,
       relax_column_count: true,
       info: true,
-    }) as RegistroBruto[];
+    });
   } catch {
     throw new ImportacaoInvalidaException(
       'Arquivo CSV inválido. Verifique as aspas e o delimitador.',
