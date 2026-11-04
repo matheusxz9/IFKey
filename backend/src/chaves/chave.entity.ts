@@ -2,12 +2,14 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Emprestimo } from '../emprestimos/emprestimo.entity';
 import { StatusChave } from '../common/enums/status-chave.enum';
 
+@Index('uq_chave_codigo_ci', { synchronize: false })
 @Entity('chave')
 export class Chave {
   @PrimaryGeneratedColumn()

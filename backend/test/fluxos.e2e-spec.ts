@@ -730,4 +730,60 @@ describe('Fluxos de negócio (e2e)', () => {
       .set('Authorization', `Bearer ${tokenInativo}`)
       .expect(401);
   });
+
+  it('rejeita identificadores duplicados sem diferenciar maiúsculas', async () => {
+    const dataSource = app.get(DataSource);
+    const sufixo = randomUUID().slice(0, 8);
+    const matricula = `case-${sufixo}`;
+    const codigo = `CASE-${sufixo}`;
+    const login = `case.login.${sufixo}`;
+
+    try {
+      await dataSource.query(
+        `INSERT INTO solicitante (nome, tipo, matricula) VALUES ('A', 'ALUNO', $1)`,
+        [matricula.toUpperCase()],
+      );
+      await expect(
+        dataSource.query(
+          `INSERT INTO solicitante (nome, tipo, matricula) VALUES ('B', 'ALUNO', $1)`,
+          [matricula.toLowerCase()],
+        ),
+      ).rejects.toMatchObject({ driverError: { code: '23505' } });
+
+      await dataSource.query(
+        `INSERT INTO chave (codigo, descricao, localizacao, status) VALUES ($1, 'A', 'A', 'DISPONIVEL')`,
+        [codigo.toUpperCase()],
+      );
+      await expect(
+        dataSource.query(
+          `INSERT INTO chave (codigo, descricao, localizacao, status) VALUES ($1, 'B', 'B', 'DISPONIVEL')`,
+          [codigo.toLowerCase()],
+        ),
+      ).rejects.toMatchObject({ driverError: { code: '23505' } });
+
+      await dataSource.query(
+        `INSERT INTO administrador (nome, login, perfil) VALUES ('A', $1, 'ADMINISTRADOR')`,
+        [login.toUpperCase()],
+      );
+      await expect(
+        dataSource.query(
+          `INSERT INTO administrador (nome, login, perfil) VALUES ('B', $1, 'ADMINISTRADOR')`,
+          [login.toLowerCase()],
+        ),
+      ).rejects.toMatchObject({ driverError: { code: '23505' } });
+    } finally {
+      await dataSource.query(
+        `DELETE FROM solicitante WHERE LOWER(matricula) = LOWER($1)`,
+        [matricula],
+      );
+      await dataSource.query(
+        `DELETE FROM chave WHERE LOWER(codigo) = LOWER($1)`,
+        [codigo],
+      );
+      await dataSource.query(
+        `DELETE FROM administrador WHERE LOWER(login) = LOWER($1)`,
+        [login],
+      );
+    }
+  });
 });
