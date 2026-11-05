@@ -68,6 +68,9 @@ entity EMPRESTIMO {
   * id_emprestimo : INT <<PK>>
   --
   * id_solicitante : INT <<FK>>
+  * id_responsavel_atual : INT <<FK>>
+  id_solicitante_devolvedor : INT <<FK>>
+  id_administrador_devolvedor : INT <<FK>>
   * id_chave : INT <<FK>>
   * id_administrador_registro : INT <<FK>>
   * data_hora_emprestimo : DATETIME
@@ -84,13 +87,29 @@ entity EMPRESTIMO {
   }
 }
 
+entity EMPRESTIMO_REPASSE {
+  * id_emprestimo_repasse : INT <<PK>>
+  --
+  * id_emprestimo : INT <<FK>>
+  * id_solicitante_origem : INT <<FK>>
+  * id_solicitante_destino : INT <<FK>>
+  * data_hora : DATETIME
+  observacoes : VARCHAR(255)
+}
+
 ' -----------------------------------------------------
 ' Relacionamentos
 ' -----------------------------------------------------
 
 SOLICITANTE ||--o{ EMPRESTIMO : solicita
+SOLICITANTE ||--o{ EMPRESTIMO : responsavel_atual
+SOLICITANTE ||--o{ EMPRESTIMO : devolve
 CHAVE ||--o{ EMPRESTIMO : "é utilizada em"
 ADMINISTRADOR ||--o{ EMPRESTIMO : registra
+ADMINISTRADOR ||--o{ EMPRESTIMO : devolve
+EMPRESTIMO ||--o{ EMPRESTIMO_REPASSE : historico
+SOLICITANTE ||--o{ EMPRESTIMO_REPASSE : origem
+SOLICITANTE ||--o{ EMPRESTIMO_REPASSE : destino
 
 ' -----------------------------------------------------
 ' Regras de negócio
@@ -116,7 +135,7 @@ note right of EMPRESTIMO
   • todo empréstimo possui:
     - um solicitante
     - uma chave
-    - um administrador responsável
+    - um responsável atual
   • devolução pode estar pendente
   • a data de devolução não pode
     ser anterior à data do empréstimo

@@ -1,0 +1,186 @@
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import API_URL, {
+  apiFetch,
+  EVENTO_USUARIO_ATUALIZADO,
+  limparSessao,
+} from "../services/api";
+
+export type Perfil = "ADMINISTRADOR" | "GESTOR" | "SOLICITANTE";
+
+export type AdminUser = {
+  id: number;
+  nome: string;
+  login: string;
+  perfil: Exclude<Perfil, "SOLICITANTE">;
+  tipo: "admin";
+};
+
+export type SolicitanteUser = {
+  id: number;
+  nome: string;
+  matricula: string;
+  perfil: "SOLICITANTE";
+  tipo: "solicitante";
+};
+
+export type User = AdminUser | SolicitanteUser;
+
+interface AuthContextType {
+  user: User | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  isGestor: boolean;
+  isSolicitante: boolean;
+  canAccessAdmin: boolean;
+  canAccessGestao: boolean;
+  canAccessEmprestimos: boolean;
+  carregando: boolean;
+  login: (token: string, user: User) => void;
+  logout: () => void;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+function parseUserFromStorage(): User | null {
+  try {
+    const saved = localStorage.getItem("user");
+    if (!saved) return null;
+    return JSON.parse(saved) as User;
+  } catch {
+    localStorage.removeItem("user");
+    return null;
+  }
+}
+
+function getRoleHelpers(user: User | null) {
+  if (!user) {
+    return {
+      isAdmin: false,
+      isGestor: false,
+      isSolicitante: false,
+      canAccessAdmin: false,
+      canAccessGestao: false,
+      canAccessEmprestimos: false,
+    };
+  }
+  const isAdmin = user.perfil === "ADMINISTRADOR";
+  const isGestor = user.perfil === "GESTOR";
+  const isSolicitante = user.perfil === "SOLICITANTE";
+  return {
+    isAdmin,
+    isGestor,
+    isSolicitante,
+    canAccessAdmin: isAdmin,
+    canAccessGestao: isAdmin || isGestor,
+    canAccessEmprestimos: isAdmin || isGestor || isSolicitante,
+  };
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(parseUserFromStorage);
+
+  const [token, setToken] = useState<string | null>(() => {
+    return localStorage.getItem("accessToken");
+  });
+
+  const logout = useCallback(() => {
+    const refreshToken = localStorage.getItem("refreshToken");
+
+    setToken(null);
+    setUser(null);
+    limparSessao();
+
+    if (!refreshToken) return;
+
+    // Revoga o refresh token no servidor sem atrasar a saída local. O logout
+    // é público e idempotente: funciona mesmo com o access token expirado.
+    void fetch(`${API_URL}/auth/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+      keepalive: true,
+    }).catch(() => undefined);
+  }, []);
+
+  const login = useCallback((novoToken: string, novoUser: User) => {
+    setToken(novoToken);
+    setUser(novoUser);
+    localStorage.setItem("accessToken", novoToken);
+    localStorage.setItem("user", JSON.stringify(novoUser));
+  }, []);
+
+  useEffect(() => {
+    if (!token || user) return;
+
+    const controller = new AbortController();
+
+    async function carregarUsuario() {
+      try {
+        const dados = await apiFetch<User>("/auth/me", {
+          signal: controller.signal,
+        });
+        setUser(dados);
+        localStorage.setItem("user", JSON.stringify(dados));
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        logout();
+      }
+    }
+
+    carregarUsuario();
+
+    return () => controller.abort();
+  }, [token, user, logout]);
+
+  useEffect(() => {
+    const sincronizarSessao = () => {
+      setUser(parseUserFromStorage());
+      setToken(localStorage.getItem("accessToken"));
+    };
+    const sincronizarEntreAbas = (evento: StorageEvent) => {
+      if (
+        evento.key === null ||
+        evento.key === "accessToken" ||
+        evento.key === "refreshToken" ||
+        evento.key === "user"
+      ) {
+        sincronizarSessao();
+      }
+    };
+
+    window.addEventListener(EVENTO_USUARIO_ATUALIZADO, sincronizarSessao);
+    window.addEventListener("storage", sincronizarEntreAbas);
+    return () => {
+      window.removeEventListener(EVENTO_USUARIO_ATUALIZADO, sincronizarSessao);
+      window.removeEventListener("storage", sincronizarEntreAbas);
+    };
+  }, []);
+
+  const roleHelpers = getRoleHelpers(user);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isAuthenticated: !!token && !!user,
+        ...roleHelpers,
+        carregando: !!token && !user,
+        login,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function useAuth(): AuthContextType {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth deve ser usado dentro de um AuthProvider");
+  }
+  return context;
+}

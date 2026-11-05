@@ -1,0 +1,307 @@
+@import "tailwindcss";
+
+/* Tipografia: Archivo (texto e interface) e IBM Plex Mono (códigos, matrículas
+   e datas). Servidas localmente em /fonts, sem dependência de CDN em runtime. */
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/archivo-latin-400700.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/archivo-latinext-400700.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/plexmono-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/plexmono-latinext-400.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/plexmono-latin-500.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/plexmono-latinext-500.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Tokens do sistema visual. Os tons neutros têm um leve desvio para o verde,
+   derivados do verde da marca (#19a84c, cor do logotipo). Todos os pares
+   texto/fundo usados na interface passam em WCAG AA (>= 4.5:1). */
+@theme {
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* superfícies */
+  --color-tela: #0a0e0c;
+  --color-superficie: #111713;
+  --color-superficie-alta: #161e19;
+  --color-superficie-ativa: #1c261f;
+
+  /* divisores e contornos */
+  --color-linha: #232d26;
+  --color-linha-forte: #3d4b43;
+  --color-linha-campo: #4a5a50;
+
+  /* texto */
+  --color-texto: #eef3ef;
+  --color-texto-medio: #c4cfc8;
+  --color-texto-fraco: #93a29a;
+  --color-tinta: #06170d;
+
+  /* marca */
+  --color-verde: #19a84c;
+  --color-verde-vivo: #21be58;
+  --color-verde-claro: #5ad189;
+  --color-verde-escuro: #0e7a38;
+
+  /* cores semânticas */
+  --color-ambar: #efc463;
+  --color-vermelho: #f79a96;
+  --color-azul: #8fbef2;
+  --color-roxo: #c8aef7;
+
+  /* véus: fundos tingidos para selos, avisos e realces */
+  --color-veu-verde: #12291c;
+  --color-veu-ambar: #2a2110;
+  --color-veu-vermelho: #2a1414;
+  --color-veu-azul: #122234;
+  --color-veu-roxo: #231a38;
+  --color-veu-cinza: #1e2621;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-tela);
+    color: var(--color-texto);
+    font-family: var(--font-sans);
+    font-synthesis-weight: none;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.011em;
+  }
+
+  ::selection {
+    background-color: var(--color-verde);
+    color: var(--color-tinta);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-verde-claro);
+    outline-offset: 2px;
+  }
+
+  /* foco programático (diálogo, painel lateral): o indicador fica com os controles focáveis */
+  [tabindex="-1"]:focus-visible {
+    outline: none;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-linha-forte) transparent;
+  }
+
+  /* O indicador nativo de data herda o esquema escuro do navegador. */
+  input[type="date"],
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    color-scheme: dark;
+  }
+}
+
+/* Campos de seleção nativos com seta própria, no tom dos demais controles. */
+.campo-selecao {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2393a29a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 0.95rem;
+  padding-right: 2.4rem;
+}
+
+/* Halo da marca: profundidade sutil no painel de apresentação do login. */
+.halo-marca {
+  position: relative;
+  isolation: isolate;
+}
+
+.halo-marca::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(
+      60% 45% at 0% 0%,
+      color-mix(in oklab, var(--color-verde) 14%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      70% 50% at 100% 100%,
+      color-mix(in oklab, var(--color-azul) 7%, transparent),
+      transparent 76%
+    );
+}
+
+@keyframes surgir-veu {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes surgir-dialogo {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.99);
+  }
+}
+
+@keyframes deslizar-entrada {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+}
+
+.animate-surgir-veu {
+  animation: surgir-veu 0.16s ease-out;
+}
+
+.animate-surgir-dialogo {
+  animation: surgir-dialogo 0.18s ease-out;
+}
+
+.animate-slide-in {
+  animation: deslizar-entrada 0.22s ease-out;
+}
+
+/* Até 1024px a tabela vira uma lista de fichas: cada célula recebe o rótulo da
+   coluna (data-rotulo) e o cabeçalho fica apenas para leitores de tela. A partir
+   daí a área de conteúdo comporta as colunas sem comprimir os identificadores. */
+@media (width < 64rem) {
+  .tabela-responsiva thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .tabela-responsiva,
+  .tabela-responsiva tbody,
+  .tabela-responsiva tr,
+  .tabela-responsiva td {
+    display: block;
+  }
+
+  .tabela-responsiva tr {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-linha);
+  }
+
+  .tabela-responsiva tr:last-child {
+    border-bottom: 0;
+  }
+
+  .tabela-responsiva td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 8rem) minmax(0, 1fr);
+    gap: 0.25rem 1rem;
+    align-items: baseline;
+    padding: 0.3125rem 0;
+  }
+
+  .tabela-responsiva td::before {
+    content: attr(data-rotulo);
+    color: var(--color-texto-fraco);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.6;
+  }
+
+  /* Selos e botões ficam do tamanho do conteúdo, e não esticados na ficha. */
+  .tabela-responsiva td > * {
+    justify-self: start;
+  }
+
+  .tabela-responsiva td[data-rotulo=""] {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 0.625rem;
+  }
+
+  .tabela-responsiva td[data-rotulo=""]::before {
+    content: none;
+  }
+
+  /* Célula de ações ocupa a linha inteira para caber os botões. */
+  .tabela-responsiva td[data-acoes] {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 0.625rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
