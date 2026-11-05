@@ -18,7 +18,11 @@ export type VarianteSelo =
   | "solicitante"
   | "aluno"
   | "professor"
-  | "servidor";
+  | "servidor"
+  | "novo"
+  | "duplicado"
+  | "erro"
+  | "repassada";
 
 const variantes: Record<VarianteSelo, string> = {
   disponivel: "border-verde/30 bg-veu-verde text-verde-claro",
@@ -33,6 +37,10 @@ const variantes: Record<VarianteSelo, string> = {
   aluno: "border-azul/30 bg-veu-azul text-azul",
   professor: "border-roxo/30 bg-veu-roxo text-roxo",
   servidor: "border-ambar/30 bg-veu-ambar text-ambar",
+  novo: "border-verde/30 bg-veu-verde text-verde-claro",
+  duplicado: "border-ambar/30 bg-veu-ambar text-ambar",
+  erro: "border-vermelho/30 bg-veu-vermelho text-vermelho",
+  repassada: "border-azul/30 bg-veu-azul text-azul",
 };
 
 const comPonto: VarianteSelo[] = [

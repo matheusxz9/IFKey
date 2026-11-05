@@ -13,6 +13,7 @@ import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
+import RepassarEmprestimoModal from "../components/RepassarEmprestimoModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
@@ -52,6 +53,7 @@ function ChavesPage() {
   const [carregandoEmprestimos, setCarregandoEmprestimos] = useState(true);
   const [erroEmprestimos, setErroEmprestimos] = useState("");
   const [emprestimoSelecionado, setEmprestimoSelecionado] = useState<Emprestimo | null>(null);
+  const [emprestimoParaRepasse, setEmprestimoParaRepasse] = useState<Emprestimo | null>(null);
   const [devolvendo, setDevolvendo] = useState(false);
 
   const abortChavesRef = useRef<AbortController | null>(null);
@@ -238,6 +240,12 @@ function ChavesPage() {
 
   const temFiltros = Boolean(busca || status);
 
+  const ehResponsavelAtual = (emprestimo: Emprestimo) =>
+    !isSolicitante || emprestimo.responsavelAtual.id === user?.id;
+
+  const podeRepassar = (emprestimo: Emprestimo) =>
+    isSolicitante && emprestimo.responsavelAtual.id === user?.id;
+
   const colunasChaves: Coluna<Chave>[] = [
     { key: "codigo", titulo: "Código", mono: true },
     { key: "descricao", titulo: "Descrição" },
@@ -271,17 +279,18 @@ function ChavesPage() {
             Emprestar
           </Botao>
         ) : (
-          <Botao
-            tamanho="sm"
-            variante="secundario"
-            aria-label={`Devolver chave ${c.codigo}`}
-            onClick={() => {
-              if (emprestimoDaChave) setEmprestimoSelecionado(emprestimoDaChave);
-            }}
-            disabled={!emprestimoDaChave}
-          >
-            Devolver
-          </Botao>
+          emprestimoDaChave && ehResponsavelAtual(emprestimoDaChave) ? (
+            <Botao
+              tamanho="sm"
+              variante="secundario"
+              aria-label={`Devolver chave ${c.codigo}`}
+              onClick={() => setEmprestimoSelecionado(emprestimoDaChave)}
+            >
+              Devolver
+            </Botao>
+          ) : (
+            <span className="text-texto-fraco">—</span>
+          )
         );
       },
     },
@@ -301,20 +310,49 @@ function ChavesPage() {
       ),
     },
     { key: "solicitante", titulo: "Solicitante", render: (e) => e.solicitante.nome },
-    { key: "matricula", titulo: "Matrícula", mono: true, render: (e) => e.solicitante.matricula },
+    {
+      key: "responsavelAtual",
+      titulo: "Responsável atual",
+      render: (e) => (
+        <>
+          <p className="font-medium text-texto">{e.responsavelAtual.nome}</p>
+          <p className="mt-0.5 font-mono text-xs text-texto-fraco">
+            {e.responsavelAtual.matricula}
+          </p>
+          {e.responsavelAtual.id !== e.solicitante.id && (
+            <Selo variante="repassada" className="mt-1">
+              Repassada
+            </Selo>
+          )}
+        </>
+      ),
+    },
     {
       key: "devolver",
       titulo: "Ação",
       acoes: true,
       render: (e) => (
-        <Botao
-          tamanho="sm"
-          variante="secundario"
-          aria-label={`Devolver chave ${e.chave.codigo}`}
-          onClick={() => setEmprestimoSelecionado(e)}
-        >
-          Devolver
-        </Botao>
+        <div className="flex flex-wrap gap-2">
+          {ehResponsavelAtual(e) && (
+            <Botao
+              tamanho="sm"
+              variante="secundario"
+              aria-label={`Devolver chave ${e.chave.codigo}`}
+              onClick={() => setEmprestimoSelecionado(e)}
+            >
+              Devolver
+            </Botao>
+          )}
+          {podeRepassar(e) && (
+            <Botao
+              tamanho="sm"
+              aria-label={`Repassar chave ${e.chave.codigo}`}
+              onClick={() => setEmprestimoParaRepasse(e)}
+            >
+              Repassar
+            </Botao>
+          )}
+        </div>
       ),
     },
   ];
@@ -427,6 +465,16 @@ function ChavesPage() {
         textoConfirmar="Confirmar devolução"
         carregando={devolvendo}
         variante="warning"
+      />
+
+      <RepassarEmprestimoModal
+        emprestimo={emprestimoParaRepasse}
+        aberto={!!emprestimoParaRepasse}
+        onClose={() => setEmprestimoParaRepasse(null)}
+        onRepassado={async () => {
+          await carregarEmprestimos();
+          await carregarChaves(pagina);
+        }}
       />
 
       <Modal

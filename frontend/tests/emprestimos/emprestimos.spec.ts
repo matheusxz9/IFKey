@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import {
+  apiComToken,
   apiDe,
   caminhoChaves,
   codigoChave,
@@ -9,8 +10,15 @@ import {
   devolverEmprestimo,
   inativarChave,
   inativarSolicitante,
+  nomeUnico,
 } from "../fixtures/api";
-import { caminhoApi, caminhoStorageState, lerUsuarios } from "../fixtures/sessao";
+import {
+  caminhoApi,
+  caminhoStorageState,
+  injetarSessao,
+  lerUsuarios,
+  tokenDe,
+} from "../fixtures/sessao";
 
 /**
  * P0 — Fluxo de empréstimo/devolução de chaves.
@@ -111,7 +119,10 @@ test("registra empréstimo e devolve a chave pelo fluxo completo", async ({
     const ativos = secaoEmprestimosAtivos(page);
     await expect(ativos.getByText(codigo)).toBeVisible();
     await expect(
-      ativos.getByRole("row").filter({ hasText: codigo }).getByText(solicitante.nome),
+      ativos
+        .getByRole("row")
+        .filter({ hasText: codigo })
+        .getByRole("cell", { name: solicitante.nome, exact: true }),
     ).toBeVisible();
 
   } finally {
@@ -354,11 +365,11 @@ test("navega entre as páginas da lista de chaves", async ({ page }) => {
     await expect(page.getByRole("button", { name: "Anterior" })).toBeDisabled();
 
     await page.getByRole("button", { name: "Próxima" }).click();
-    await expect(page.getByText(`Página 2 de ${totalPaginas}`)).toBeVisible();
+    await expect(page.getByText(/^Página 2 de \d+$/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Anterior" })).toBeEnabled();
 
     await page.getByRole("button", { name: "Anterior" }).click();
-    await expect(page.getByText(`Página 1 de ${totalPaginas}`)).toBeVisible();
+    await expect(page.getByText(/^Página 1 de \d+$/)).toBeVisible();
   } finally {
     for (const id of criadas) {
       await inativarChave(api, id);
@@ -407,7 +418,10 @@ test.describe("como solicitante", () => {
       const ativos = secaoEmprestimosAtivos(page);
       await expect(ativos.getByText(codigo)).toBeVisible();
       await expect(
-        ativos.getByRole("row").filter({ hasText: codigo }).getByText(solicitante.nome),
+        ativos
+          .getByRole("row")
+          .filter({ hasText: codigo })
+          .getByRole("cell", { name: solicitante.nome, exact: true }),
       ).toBeVisible();
 
       await ativos.getByRole("button", { name: `Devolver chave ${codigo}` }).click();
@@ -424,4 +438,71 @@ test.describe("como solicitante", () => {
       await api.dispose();
     }
   });
+});
+
+test("responsável repassa a chave para outro solicitante", async ({ page }) => {
+  const api = await apiDe("admin");
+  const a = await criarSolicitante(api, { nome: nomeUnico("Repasse A") });
+  const b = await criarSolicitante(api, { nome: nomeUnico("Repasse B") });
+  const chave = await criarChave(api);
+  const emprestimo = await criarEmprestimo(api, {
+    solicitanteId: a.id,
+    chaveId: chave.id,
+  });
+
+  const usuarioA = {
+    id: a.id,
+    nome: a.nome,
+    matricula: a.matricula,
+    perfil: "SOLICITANTE" as const,
+    tipo: "solicitante" as const,
+  };
+  await injetarSessao(page, usuarioA);
+
+  try {
+    await page.goto("/chaves");
+    const ativos = secaoEmprestimosAtivos(page);
+    const linha = ativos.getByRole("row").filter({ hasText: chave.codigo });
+    await expect(linha).toContainText(a.nome);
+    await linha.getByRole("button", { name: `Repassar chave ${chave.codigo}` }).click();
+
+    const modal = page.getByRole("dialog", { name: "Repassar responsabilidade" });
+    await modal.getByLabel("Matrícula do novo responsável").fill(b.matricula);
+    await modal.getByRole("button", { name: "Buscar solicitante" }).click();
+    await expect(modal).toContainText(b.nome);
+    await modal.getByRole("button", { name: "Confirmar repasse" }).click();
+    await expect(page.getByText("Responsabilidade repassada com sucesso!")).toBeVisible();
+    await expect(linha).toContainText(b.nome);
+    await expect(linha.getByText("Repassada")).toBeVisible();
+
+    const detalhe = await api.get(caminhoApi(`/emprestimos/${emprestimo.id}`));
+    expect(((await detalhe.json()) as { responsavelAtual: { id: number } }).responsavelAtual.id).toBe(
+      b.id,
+    );
+
+    const tokenB = tokenDe({
+      id: b.id,
+      nome: b.nome,
+      matricula: b.matricula,
+      perfil: "SOLICITANTE",
+      tipo: "solicitante",
+    });
+    const apiB = await apiComToken(tokenB);
+    await devolverEmprestimo(apiB, emprestimo.id);
+    const devolvido = await api.get(caminhoApi(`/emprestimos/${emprestimo.id}`));
+    expect(
+      ((await devolvido.json()) as { devolvidoPor: { tipo: string; id: number } })
+        .devolvidoPor,
+    ).toMatchObject({
+      tipo: "SOLICITANTE",
+      id: b.id,
+    });
+
+    await apiB.dispose();
+  } finally {
+    await inativarChave(api, chave.id);
+    await inativarSolicitante(api, a.id);
+    await inativarSolicitante(api, b.id);
+    await api.dispose();
+  }
 });

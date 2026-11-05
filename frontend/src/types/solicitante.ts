@@ -7,7 +7,7 @@ export interface Solicitante {
   nome: string;
   tipo: TipoSolicitante;
   matricula: string;
-  contato: string;
+  contato: string | null;
   ativo: boolean;
 }
 

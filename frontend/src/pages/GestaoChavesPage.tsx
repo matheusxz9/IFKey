@@ -4,11 +4,15 @@ import {
   criarChave,
   atualizarChave,
   inativarChave,
+  previsualizarImportacaoChaves,
+  importarChaves,
 } from "../services/chaves";
 import type { Chave, StatusChave } from "../types/chave";
+import type { DadosImportacaoChave } from "../types/importacao";
 import { useToast } from "../contexts/ToastContext";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
+import ImportacaoCsvModal, { type CampoImportacao } from "../components/ImportacaoCsvModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
@@ -21,6 +25,18 @@ import { Selo } from "../components/ui/Selo";
 import { pluralizar } from "../utils/formatacao";
 
 type ModalTipo = "cadastro" | "edicao" | null;
+
+const MODELO_CSV_CHAVES = [
+  "codigo;descricao;localizacao",
+  "LAB-01;Chave do laboratório de informática;Bloco A - Sala 1",
+  "LAB-02;Chave do laboratório de redes;Bloco B - Sala 3",
+].join("\n");
+
+const CAMPOS_IMPORTACAO_CHAVES: CampoImportacao[] = [
+  { chave: "codigo", rotulo: "Código", obrigatorio: true, maxLength: 20 },
+  { chave: "descricao", rotulo: "Descrição", obrigatorio: true, maxLength: 120 },
+  { chave: "localizacao", rotulo: "Localização", obrigatorio: true, maxLength: 120 },
+];
 
 function GestaoChavesPage() {
   const toast = useToast();
@@ -37,6 +53,7 @@ function GestaoChavesPage() {
   const [total, setTotal] = useState(0);
 
   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
+  const [importacaoAberta, setImportacaoAberta] = useState(false);
   const [chaveEmEdicao, setChaveEmEdicao] = useState<Chave | null>(null);
 
   const [codigo, setCodigo] = useState("");
@@ -278,6 +295,7 @@ function GestaoChavesPage() {
           titulo="Gestão de chaves"
           subtitulo="Cadastre, edite e gerencie as chaves das salas e laboratórios."
         >
+          <Botao variante="secundario" onClick={() => setImportacaoAberta(true)}>Importar CSV</Botao>
           <Botao
             variante="primario"
             onClick={abrirModalCadastro}
@@ -368,6 +386,25 @@ function GestaoChavesPage() {
           />
         </Cartao>
       </div>
+
+      <ImportacaoCsvModal<DadosImportacaoChave>
+        aberto={importacaoAberta}
+        titulo="Importar chaves"
+        descricao="As chaves importadas entram como disponíveis. Nada será gravado antes da aprovação."
+        nomeArquivoModelo="modelo-chaves.csv"
+        conteudoModelo={MODELO_CSV_CHAVES}
+        campos={CAMPOS_IMPORTACAO_CHAVES}
+        campoIdentificador="codigo"
+        previsualizar={previsualizarImportacaoChaves}
+        importar={importarChaves}
+        onFechar={() => setImportacaoAberta(false)}
+        onImportado={(relatorio) => {
+          const partes = [`${relatorio.criados} criada(s)`];
+          if (relatorio.ignorados > 0) partes.push(`${relatorio.ignorados} ignorada(s)`);
+          toast.success(`Importação concluída: ${partes.join(", ")}.`);
+          if (relatorio.criados > 0) void carregarChaves(1);
+        }}
+      />
 
       <Modal
         aberto={!!modalTipo}

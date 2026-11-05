@@ -1,5 +1,11 @@
 import { apiFetch, type ApiFetchOptions } from "./api";
 import type { Chave, ListaChavesResponse, StatusChave } from "../types/chave";
+import type {
+  DadosImportacaoChave,
+  LinhaImportacao,
+  PreviaImportacao,
+  RelatorioImportacao,
+} from "../types/importacao";
 
 interface ListarChavesParams {
   busca?: string;
@@ -80,6 +86,28 @@ export async function atualizarChave(
     method: "PATCH",
     body: JSON.stringify(dados),
     ...options,
+  });
+}
+
+export function previsualizarImportacaoChaves(
+  arquivo: File,
+): Promise<PreviaImportacao<DadosImportacaoChave>> {
+  const body = new FormData();
+  body.append("arquivo", arquivo);
+  return apiFetch<PreviaImportacao<DadosImportacaoChave>>(
+    "/chaves/importacao/previa",
+    { method: "POST", body },
+  );
+}
+
+export function importarChaves(
+  linhas: LinhaImportacao<DadosImportacaoChave>[],
+): Promise<RelatorioImportacao> {
+  return apiFetch<RelatorioImportacao>("/chaves/importacao", {
+    method: "POST",
+    body: JSON.stringify({
+      linhas: linhas.map(({ linha, dados }) => ({ linha, ...dados })),
+    }),
   });
 }
 

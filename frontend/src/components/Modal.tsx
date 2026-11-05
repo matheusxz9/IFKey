@@ -7,13 +7,14 @@ interface ModalProps {
   onClose: () => void;
   titulo: string;
   children: ReactNode;
-  tamanho?: "sm" | "md" | "lg";
+  tamanho?: "sm" | "md" | "lg" | "xl";
 }
 
 const tamanhoClasses = {
   sm: "max-w-md",
   md: "max-w-lg",
   lg: "max-w-2xl",
+  xl: "max-w-4xl",
 };
 
 const SELETOR_FOCOVEIS =
