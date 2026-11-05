@@ -13,6 +13,7 @@ import { Administrador } from './administradores/administrador.entity';
 import { Solicitante } from './solicitantes/solicitante.entity';
 import { Chave } from './chaves/chave.entity';
 import { Emprestimo } from './emprestimos/emprestimo.entity';
+import { RepasseEmprestimo } from './emprestimos/repasse-emprestimo.entity';
 import { AuthModule } from './auth/auth.module';
 import { RefreshToken } from './auth/refresh-token.entity';
 
@@ -39,7 +40,14 @@ import { RefreshToken } from './auth/refresh-token.entity';
         username: configService.get<string>('DB_USERNAME') || 'postgres',
         password: configService.get<string>('DB_PASSWORD') || 'postgres',
         database: configService.get<string>('DB_NAME') || 'ifkey_db',
-        entities: [Administrador, Solicitante, Chave, Emprestimo, RefreshToken],
+        entities: [
+          Administrador,
+          Solicitante,
+          Chave,
+          Emprestimo,
+          RepasseEmprestimo,
+          RefreshToken,
+        ],
         migrations: [`${__dirname}/migrations/*.js`],
         migrationsTableName: 'migrations',
         retryAttempts: 60,

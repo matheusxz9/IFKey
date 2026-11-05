@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import { Emprestimo } from './emprestimo.entity';
@@ -18,6 +18,8 @@ import {
 import { StatusChave } from '../common/enums/status-chave.enum';
 import { StatusEmprestimo } from '../common/enums/status-emprestimo.enum';
 import { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
+import { RepasseEmprestimo } from './repasse-emprestimo.entity';
+import { RepassarEmprestimoDto } from './dto/repassar-emprestimo.dto';
 
 @Injectable()
 export class EmprestimosService {
@@ -58,6 +60,7 @@ export class EmprestimosService {
 
       const emprestimo = emprestimoRepo.create({
         solicitante: { id: solicitanteId },
+        responsavelAtual: { id: solicitanteId },
         chave: { id: dto.chaveId },
         // Empréstimo registrado pelo próprio solicitante não tem administrador associado.
         ...(ehSolicitante ? {} : { administrador: { id: usuarioId } }),
@@ -97,12 +100,19 @@ export class EmprestimosService {
 
       const emprestimo = await emprestimoRepo.findOne({
         where: { id },
-        relations: { chave: true, solicitante: true },
+        relations: { chave: true, solicitante: true, responsavelAtual: true },
       });
       if (!emprestimo) {
         throw new NaoEncontradoException('Empréstimo não encontrado.');
       }
-      this.garantirProprioEmprestimo(emprestimo, user);
+      if (
+        user?.perfil === PerfilAdministrador.SOLICITANTE &&
+        emprestimo.responsavelAtual.id !== user.id
+      ) {
+        throw new SemPermissaoException(
+          'Somente o responsável atual pode devolver este empréstimo.',
+        );
+      }
       if (emprestimo.status === StatusEmprestimo.DEVOLVIDA) {
         throw new EmprestimoJaDevolvidoException();
       }
@@ -118,6 +128,17 @@ export class EmprestimosService {
       await emprestimoRepo.update(id, {
         status: StatusEmprestimo.DEVOLVIDA,
         dataHoraDevolucao: new Date(),
+        ...(user?.perfil === PerfilAdministrador.SOLICITANTE
+          ? {
+              devolvedorSolicitante: { id: user.id },
+              devolvedorAdministrador: null,
+            }
+          : user
+            ? {
+                devolvedorAdministrador: { id: user.id },
+                devolvedorSolicitante: null,
+              }
+            : {}),
         ...(dto.observacoes ? { observacoes: dto.observacoes } : {}),
       });
 
@@ -129,9 +150,59 @@ export class EmprestimosService {
     });
   }
 
+  async repassar(
+    id: number,
+    dto: RepassarEmprestimoDto,
+    user: { id: number; perfil: string },
+  ) {
+    if (user.perfil !== 'SOLICITANTE') throw new SemPermissaoException();
+    return this.repo.manager.transaction(async (manager) => {
+      const emprestimoRepo = manager.getRepository(Emprestimo);
+      const travado = await emprestimoRepo.findOne({
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!travado)
+        throw new NaoEncontradoException('Empréstimo não encontrado.');
+      const emprestimo = await emprestimoRepo.findOne({
+        where: { id },
+        relations: { responsavelAtual: true },
+      });
+      if (!emprestimo)
+        throw new NaoEncontradoException('Empréstimo não encontrado.');
+      if (emprestimo.responsavelAtual.id !== user.id)
+        throw new SemPermissaoException(
+          'Somente o responsável atual pode repassar este empréstimo.',
+        );
+      if (emprestimo.status === StatusEmprestimo.DEVOLVIDA)
+        throw new EmprestimoJaDevolvidoException();
+      if (dto.solicitanteId === user.id)
+        throw new BadRequestException(
+          'O destinatário deve ser diferente do responsável atual.',
+        );
+      const destino = await manager
+        .getRepository(Solicitante)
+        .findOne({ where: { id: dto.solicitanteId } });
+      if (!destino)
+        throw new NaoEncontradoException('Destinatário não encontrado.');
+      if (!destino.ativo) throw new SolicitanteInativoException();
+      await manager.getRepository(RepasseEmprestimo).insert({
+        emprestimo: { id },
+        origem: { id: user.id },
+        destino: { id: destino.id },
+        observacoes: dto.observacoes ?? null,
+      });
+      await emprestimoRepo.update(id, { responsavelAtual: { id: destino.id } });
+      return this.toResponse(
+        await this.buscarEntidadeComManager(manager, id, true),
+      );
+    });
+  }
+
   private async buscarEntidadeComManager(
     manager: EntityManager,
     id: number,
+    comRepasses = false,
   ): Promise<Emprestimo> {
     const emprestimo = await manager.findOne(Emprestimo, {
       where: { id },
@@ -139,6 +210,10 @@ export class EmprestimosService {
         solicitante: true,
         chave: true,
         administrador: true,
+        responsavelAtual: true,
+        devolvedorSolicitante: true,
+        devolvedorAdministrador: true,
+        ...(comRepasses ? { repasses: { origem: true, destino: true } } : {}),
       },
     });
     if (!emprestimo) {
@@ -151,25 +226,33 @@ export class EmprestimosService {
     query: ListarEmprestimosQueryDto,
     user?: { id: number; perfil: string },
   ) {
-    const solicitanteId =
-      user?.perfil === PerfilAdministrador.SOLICITANTE
-        ? user.id
-        : query.solicitanteId;
-    const [data, total] = await this.repo.findAndCount({
-      where: {
-        ...(query.status ? { status: query.status } : {}),
-        ...(solicitanteId ? { solicitante: { id: solicitanteId } } : {}),
-        ...(query.chaveId ? { chave: { id: query.chaveId } } : {}),
-      },
-      relations: {
-        solicitante: true,
-        chave: true,
-        administrador: true,
-      },
-      order: { dataHoraEmprestimo: 'DESC' },
-      skip: (query.page - 1) * query.limit,
-      take: query.limit,
-    });
+    const qb = this.repo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.solicitante', 's')
+      .leftJoinAndSelect('e.chave', 'c')
+      .leftJoinAndSelect('e.administrador', 'a')
+      .leftJoinAndSelect('e.responsavelAtual', 'r')
+      .leftJoinAndSelect('e.devolvedorSolicitante', 'ds')
+      .leftJoinAndSelect('e.devolvedorAdministrador', 'da');
+    if (query.status)
+      qb.andWhere('e.status = :status', { status: query.status });
+    if (query.chaveId)
+      qb.andWhere('c.id = :chaveId', { chaveId: query.chaveId });
+    if (user?.perfil === PerfilAdministrador.SOLICITANTE) {
+      qb.andWhere(
+        `(s.id = :participante OR r.id = :participante OR EXISTS
+        (SELECT 1 FROM emprestimo_repasse p WHERE p.id_emprestimo = e.id
+        AND (p.id_solicitante_origem = :participante OR p.id_solicitante_destino = :participante)))`,
+        { participante: user.id },
+      );
+    } else if (query.solicitanteId)
+      qb.andWhere('s.id = :solicitanteId', {
+        solicitanteId: query.solicitanteId,
+      });
+    qb.orderBy('e.dataHoraEmprestimo', 'DESC')
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit);
+    const [data, total] = await qb.getManyAndCount();
     return {
       data: data.map((e) => this.toResponse(e)),
       meta: {
@@ -190,6 +273,9 @@ export class EmprestimosService {
       .leftJoinAndSelect('e.solicitante', 's')
       .leftJoinAndSelect('e.chave', 'c')
       .leftJoinAndSelect('e.administrador', 'a')
+      .leftJoinAndSelect('e.responsavelAtual', 'r')
+      .leftJoinAndSelect('e.devolvedorSolicitante', 'ds')
+      .leftJoinAndSelect('e.devolvedorAdministrador', 'da')
       .addSelect(
         `CASE WHEN e.status = '${StatusEmprestimo.EMPRESTADA}' THEN 0 ELSE 1 END`,
         'ordem_status',
@@ -198,9 +284,12 @@ export class EmprestimosService {
       .addOrderBy('e.dataHoraEmprestimo', 'DESC');
 
     if (user?.perfil === PerfilAdministrador.SOLICITANTE) {
-      qb.andWhere('e.solicitante = :solicitanteId', {
-        solicitanteId: user.id,
-      });
+      qb.andWhere(
+        `(s.id = :participante OR r.id = :participante OR EXISTS
+        (SELECT 1 FROM emprestimo_repasse p WHERE p.id_emprestimo = e.id
+        AND (p.id_solicitante_origem = :participante OR p.id_solicitante_destino = :participante)))`,
+        { participante: user.id },
+      );
     } else {
       const solicitanteId = query.solicitanteId;
       if (solicitanteId) {
@@ -239,22 +328,20 @@ export class EmprestimosService {
 
   async buscar(id: number, user?: { id: number; perfil: string }) {
     const emprestimo = await this.buscarEntidade(id);
-    this.garantirProprioEmprestimo(emprestimo, user);
-    return this.toResponse(emprestimo);
-  }
-
-  private garantirProprioEmprestimo(
-    emprestimo: Emprestimo,
-    user?: { id: number; perfil: string },
-  ) {
     if (
       user?.perfil === PerfilAdministrador.SOLICITANTE &&
-      emprestimo.solicitante?.id !== user.id
+      emprestimo.solicitante?.id !== user.id &&
+      emprestimo.responsavelAtual?.id !== user.id &&
+      !emprestimo.repasses?.some(
+        (repasse) =>
+          repasse.origem.id === user.id || repasse.destino.id === user.id,
+      )
     ) {
       throw new SemPermissaoException(
-        'Solicitante só pode acessar os próprios empréstimos.',
+        'Solicitante só pode acessar os empréstimos em que participa.',
       );
     }
+    return this.toResponse(emprestimo);
   }
 
   private async buscarEntidade(id: number): Promise<Emprestimo> {
@@ -264,6 +351,10 @@ export class EmprestimosService {
         solicitante: true,
         chave: true,
         administrador: true,
+        responsavelAtual: true,
+        devolvedorSolicitante: true,
+        devolvedorAdministrador: true,
+        repasses: { origem: true, destino: true },
       },
     });
     if (!emprestimo) {
@@ -285,6 +376,12 @@ export class EmprestimosService {
   }
 
   private toResponse(e: Emprestimo) {
+    const pessoa = (s: Solicitante) => ({
+      id: s.id,
+      nome: s.nome,
+      matricula: s.matricula,
+      tipo: s.tipo,
+    });
     return {
       id: e.id,
       solicitante: e.solicitante
@@ -305,6 +402,30 @@ export class EmprestimosService {
       administrador: e.administrador
         ? { id: e.administrador.id, nome: e.administrador.nome }
         : null,
+      responsavelAtual: e.responsavelAtual ? pessoa(e.responsavelAtual) : null,
+      devolvidoPor: e.devolvedorSolicitante
+        ? { ...pessoa(e.devolvedorSolicitante), tipo: 'SOLICITANTE' }
+        : e.devolvedorAdministrador
+          ? {
+              id: e.devolvedorAdministrador.id,
+              nome: e.devolvedorAdministrador.nome,
+              login: e.devolvedorAdministrador.login,
+              tipo: e.devolvedorAdministrador.perfil,
+            }
+          : null,
+      ...(e.repasses
+        ? {
+            repasses: e.repasses
+              .sort((a, b) => a.id - b.id)
+              .map((repasse) => ({
+                id: repasse.id,
+                origem: pessoa(repasse.origem),
+                destino: pessoa(repasse.destino),
+                dataHora: repasse.dataHora,
+                observacoes: repasse.observacoes,
+              })),
+          }
+        : {}),
       dataHoraEmprestimo: e.dataHoraEmprestimo,
       dataHoraDevolucao: e.dataHoraDevolucao,
       status: e.status,

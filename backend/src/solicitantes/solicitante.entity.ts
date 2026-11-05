@@ -22,7 +22,7 @@ export class Solicitante {
   @Column({ length: 30, unique: true })
   matricula: string;
 
-  @Column({ length: 120, nullable: true })
+  @Column({ type: 'varchar', length: 120, nullable: true })
   contato: string | null;
 
   @Column({ default: true })

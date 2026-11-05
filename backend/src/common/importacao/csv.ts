@@ -77,7 +77,7 @@ export function lerCsv(
       skip_empty_lines: false,
       relax_column_count: true,
       info: true,
-    });
+    }) as unknown as { record: string[]; info: { lines: number } }[];
   } catch {
     throw new ImportacaoInvalidaException(
       'Arquivo CSV inválido. Verifique as aspas e o delimitador.',

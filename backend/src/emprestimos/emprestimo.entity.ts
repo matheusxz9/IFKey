@@ -4,12 +4,14 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Administrador } from '../administradores/administrador.entity';
 import { Chave } from '../chaves/chave.entity';
 import { Solicitante } from '../solicitantes/solicitante.entity';
 import { StatusEmprestimo } from '../common/enums/status-emprestimo.enum';
+import { RepasseEmprestimo } from './repasse-emprestimo.entity';
 
 @Entity('emprestimo')
 export class Emprestimo {
@@ -19,6 +21,21 @@ export class Emprestimo {
   @ManyToOne(() => Solicitante, (solicitante) => solicitante.emprestimos)
   @JoinColumn({ name: 'id_solicitante' })
   solicitante: Solicitante;
+
+  @ManyToOne(() => Solicitante, { nullable: false })
+  @JoinColumn({ name: 'id_responsavel_atual' })
+  responsavelAtual: Solicitante;
+
+  @ManyToOne(() => Solicitante, { nullable: true })
+  @JoinColumn({ name: 'id_solicitante_devolvedor' })
+  devolvedorSolicitante: Solicitante | null;
+
+  @ManyToOne(() => Administrador, { nullable: true })
+  @JoinColumn({ name: 'id_administrador_devolvedor' })
+  devolvedorAdministrador: Administrador | null;
+
+  @OneToMany(() => RepasseEmprestimo, (repasse) => repasse.emprestimo)
+  repasses: RepasseEmprestimo[];
 
   @ManyToOne(() => Chave, (chave) => chave.emprestimos)
   @JoinColumn({ name: 'id_chave' })
