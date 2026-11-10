@@ -15,6 +15,7 @@ import { CriarAdministradorDto } from './dto/criar-administrador.dto';
 import { AtualizarAdministradorDto } from './dto/atualizar-administrador.dto';
 import { ConverterSolicitanteDto } from './dto/converter-solicitante.dto';
 import { ListarAdministradoresQueryDto } from './dto/listar-administradores.query.dto';
+import { calcularSkip, montarMeta } from '../common/paginacao';
 
 @Injectable()
 export class AdministradoresService {
@@ -43,10 +44,10 @@ export class AdministradoresService {
     }
 
     qb.orderBy('admin.nome', 'ASC');
-    qb.skip((page - 1) * limit).take(limit);
+    qb.skip(calcularSkip(page, limit)).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { data, ...montarMeta(page, limit, total) };
   }
 
   async buscar(id: number) {
@@ -88,11 +89,9 @@ export class AdministradoresService {
     const perfilFinal = dto.perfil ?? atual.perfil;
     const ativoFinal = dto.ativo ?? atual.ativo;
     const continuaAdminAtivo =
-      (perfilFinal as PerfilAdministrador) ===
-        PerfilAdministrador.ADMINISTRADOR && ativoFinal;
+      perfilFinal === PerfilAdministrador.ADMINISTRADOR && ativoFinal;
     const eraAdminAtivo =
-      (atual.perfil as PerfilAdministrador) ===
-        PerfilAdministrador.ADMINISTRADOR && atual.ativo;
+      atual.perfil === PerfilAdministrador.ADMINISTRADOR && atual.ativo;
     if (eraAdminAtivo && !continuaAdminAtivo) {
       await this.garantirNaoEhUltimoAdmin(id);
     }
@@ -121,11 +120,7 @@ export class AdministradoresService {
 
   async inativar(id: number) {
     const admin = await this.buscar(id);
-    if (
-      (admin.perfil as PerfilAdministrador) ===
-        PerfilAdministrador.ADMINISTRADOR &&
-      admin.ativo
-    ) {
+    if (admin.perfil === PerfilAdministrador.ADMINISTRADOR && admin.ativo) {
       await this.garantirNaoEhUltimoAdmin(id);
     }
     admin.ativo = false;
@@ -162,11 +157,7 @@ export class AdministradoresService {
         );
       }
 
-      if (
-        (admin.perfil as PerfilAdministrador) ===
-          PerfilAdministrador.ADMINISTRADOR &&
-        admin.ativo
-      ) {
+      if (admin.perfil === PerfilAdministrador.ADMINISTRADOR && admin.ativo) {
         const outrosAdmins = await this.contarAdminsAtivos(adminRepo, id);
         if (outrosAdmins === 0) {
           throw new UltimoAdministradorException();

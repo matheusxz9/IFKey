@@ -4,14 +4,18 @@ import API_URL, {
   EVENTO_USUARIO_ATUALIZADO,
   limparSessao,
 } from "../services/api";
+import type {
+  PerfilAdministrador,
+  PerfilSistema,
+} from "../types/administrador";
 
-export type Perfil = "ADMINISTRADOR" | "GESTOR" | "SOLICITANTE";
+export type Perfil = PerfilSistema;
 
 export type AdminUser = {
   id: number;
   nome: string;
   login: string;
-  perfil: Exclude<Perfil, "SOLICITANTE">;
+  perfil: PerfilAdministrador;
   tipo: "admin";
 };
 

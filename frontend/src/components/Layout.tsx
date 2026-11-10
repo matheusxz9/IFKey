@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import ErrorBoundary from "./ErrorBoundary";
 import { Botao } from "./ui/Botao";
 import { Icone, type NomeIcone } from "./ui/Icone";
-import { Selo, type VarianteSelo } from "./ui/Selo";
+import { SeloPerfil } from "./Selos";
 import { Girando } from "./ui/Estado";
 import { cn } from "../utils/classes";
 import logoIfkey from "../assets/logo-ifkey.png";
@@ -15,18 +15,6 @@ function iniciaisDoNome(nome?: string) {
   if (partes.length === 1) return partes[0].slice(0, 1).toUpperCase();
   return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
 }
-
-const variantePerfil: Record<string, VarianteSelo> = {
-  ADMINISTRADOR: "administrador",
-  GESTOR: "gestor",
-  SOLICITANTE: "solicitante",
-};
-
-const rotuloPerfil: Record<string, string> = {
-  ADMINISTRADOR: "Administrador",
-  GESTOR: "Gestor",
-  SOLICITANTE: "Solicitante",
-};
 
 interface ItemMenuProps {
   para: string;
@@ -219,9 +207,7 @@ export default function Layout() {
 
           {user && (
             <div className="mt-3 flex">
-              <Selo variante={variantePerfil[user.perfil] ?? "devolvida"}>
-                {rotuloPerfil[user.perfil] ?? user.perfil}
-              </Selo>
+              <SeloPerfil perfil={user.perfil} />
             </div>
           )}
 

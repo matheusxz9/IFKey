@@ -1,21 +1,24 @@
-const ROTULOS_TIPO: Record<string, string> = {
+import type { PerfilSistema } from "../types/administrador";
+import type { TipoSolicitante } from "../types/solicitante";
+
+const ROTULOS_TIPO: Record<TipoSolicitante, string> = {
   ALUNO: "Aluno",
   PROFESSOR: "Professor",
   SERVIDOR: "Servidor",
 };
 
-const ROTULOS_PERFIL: Record<string, string> = {
+const ROTULOS_PERFIL: Record<PerfilSistema, string> = {
   ADMINISTRADOR: "Administrador",
   GESTOR: "Gestor",
   SOLICITANTE: "Solicitante",
 };
 
 /** Converte os enums da API em rótulos legíveis (ex.: SERVIDOR → Servidor). */
-export function formatarTipo(tipo: string) {
+export function formatarTipo(tipo: TipoSolicitante) {
   return ROTULOS_TIPO[tipo] ?? tipo;
 }
 
-export function formatarPerfil(perfil: string) {
+export function formatarPerfil(perfil: PerfilSistema) {
   return ROTULOS_PERFIL[perfil] ?? perfil;
 }
 

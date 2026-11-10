@@ -5,6 +5,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { AuthService } from './auth.service';
 import type { UsuarioAutenticado } from './auth.service';
 import { SemPermissaoException } from '../common/exceptions/app.exception';
+import { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
 
 describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
@@ -16,7 +17,7 @@ describe('JwtAuthGuard', () => {
     id: 1,
     nome: 'Admin Teste',
     login: 'admin.teste',
-    perfil: 'ADMINISTRADOR',
+    perfil: PerfilAdministrador.ADMINISTRADOR,
     tipo: 'admin',
   };
 

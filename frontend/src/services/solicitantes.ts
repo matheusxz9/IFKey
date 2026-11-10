@@ -1,4 +1,5 @@
 import { apiFetch, type ApiFetchOptions } from "./api";
+import { montarQueryString } from "./query";
 import type {
   Solicitante,
   ListaSolicitantesResponse,
@@ -18,36 +19,17 @@ export async function listarSolicitantes(
   params: ListarSolicitantesParams = {},
   options?: ApiFetchOptions,
 ): Promise<ListaSolicitantesResponse> {
-  const query = new URLSearchParams();
-
-  if (params.nome) {
-    query.set("nome", params.nome);
-  }
-
-  if (params.matricula) {
-    query.set("matricula", params.matricula);
-  }
-
-  if (params.tipo) {
-    query.set("tipo", params.tipo);
-  }
-
-  if (params.ativo !== undefined) {
-    query.set("ativo", String(params.ativo));
-  }
-
-  if (params.page) {
-    query.set("page", String(params.page));
-  }
-
-  if (params.limit) {
-    query.set("limit", String(params.limit));
-  }
-
-  const queryString = query.toString();
+  const queryString = montarQueryString({
+    nome: params.nome,
+    matricula: params.matricula,
+    tipo: params.tipo,
+    ativo: params.ativo,
+    page: params.page,
+    limit: params.limit,
+  });
 
   return apiFetch<ListaSolicitantesResponse>(
-    `/solicitantes${queryString ? `?${queryString}` : ""}`,
+    `/solicitantes${queryString}`,
     options,
   );
 }
@@ -111,10 +93,7 @@ export async function buscarSolicitantePorMatricula(
   matricula: string,
   options?: ApiFetchOptions,
 ): Promise<Solicitante> {
-  const resposta = await apiFetch<ListaSolicitantesResponse>(
-    `/solicitantes?matricula=${encodeURIComponent(matricula)}`,
-    options,
-  );
+  const resposta = await listarSolicitantes({ matricula }, options);
 
   const solicitante = resposta.data?.[0];
 

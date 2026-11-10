@@ -1,12 +1,10 @@
 import { Transform } from 'class-transformer';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
-
-const trim = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() : value;
+import { transformarTrim } from '../../common/dto/transformacoes';
 
 export class DevolverEmprestimoDto {
   @IsOptional()
-  @Transform(trim)
+  @Transform(transformarTrim)
   @IsString()
   @MaxLength(255)
   observacoes?: string;

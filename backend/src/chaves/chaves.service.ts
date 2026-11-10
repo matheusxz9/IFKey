@@ -13,6 +13,7 @@ import {
 import { Emprestimo } from '../emprestimos/emprestimo.entity';
 import { StatusEmprestimo } from '../common/enums/status-emprestimo.enum';
 import { StatusChave } from '../common/enums/status-chave.enum';
+import { calcularSkip, montarMeta } from '../common/paginacao';
 
 @Injectable()
 export class ChavesService {
@@ -45,16 +46,11 @@ export class ChavesService {
       });
     }
     qb.orderBy('c.codigo', 'ASC').addOrderBy('c.id', 'ASC');
-    qb.skip((query.page - 1) * query.limit).take(query.limit);
+    qb.skip(calcularSkip(query.page, query.limit)).take(query.limit);
     const [data, total] = await qb.getManyAndCount();
     return {
       data,
-      meta: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages: Math.ceil(total / query.limit),
-      },
+      meta: montarMeta(query.page, query.limit, total),
     };
   }
 
@@ -104,14 +100,7 @@ export class ChavesService {
       }
     }
     if (dto.ativo === false) {
-      const temEmprestimoAtivo = await this.emprestimoRepo.exists({
-        where: { chave: { id }, status: StatusEmprestimo.EMPRESTADA },
-      });
-      if (temEmprestimoAtivo) {
-        throw new RecursoComEmprestimoAtivoException(
-          'Chave não pode ser inativada: há empréstimo ativo.',
-        );
-      }
+      await this.garantirSemEmprestimoAtivo(id);
     }
     Object.assign(chave, dto);
     return this.repo.save(chave);
@@ -119,6 +108,12 @@ export class ChavesService {
 
   async inativar(id: number): Promise<void> {
     const chave = await this.buscar(id);
+    await this.garantirSemEmprestimoAtivo(id);
+    chave.ativo = false;
+    await this.repo.save(chave);
+  }
+
+  private async garantirSemEmprestimoAtivo(id: number): Promise<void> {
     const temEmprestimoAtivo = await this.emprestimoRepo.exists({
       where: { chave: { id }, status: StatusEmprestimo.EMPRESTADA },
     });
@@ -127,7 +122,5 @@ export class ChavesService {
         'Chave não pode ser inativada: há empréstimo ativo.',
       );
     }
-    chave.ativo = false;
-    await this.repo.save(chave);
   }
 }

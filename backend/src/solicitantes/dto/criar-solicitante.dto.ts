@@ -1,12 +1,10 @@
 import { Transform } from 'class-transformer';
 import { IsEnum, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { TipoSolicitante } from '../../common/enums/tipo-solicitante.enum';
-
-const trim = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() : value;
+import { transformarTrim } from '../../common/dto/transformacoes';
 
 export class CriarSolicitanteDto {
-  @Transform(trim)
+  @Transform(transformarTrim)
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)
@@ -15,13 +13,13 @@ export class CriarSolicitanteDto {
   @IsEnum(TipoSolicitante)
   tipo: TipoSolicitante;
 
-  @Transform(trim)
+  @Transform(transformarTrim)
   @IsString()
   @IsNotEmpty()
   @MaxLength(30)
   matricula: string;
 
-  @Transform(trim)
+  @Transform(transformarTrim)
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)

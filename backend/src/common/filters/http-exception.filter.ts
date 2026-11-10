@@ -20,6 +20,13 @@ const STATUS_NAMES: Record<number, string> = {
   [HttpStatus.INTERNAL_SERVER_ERROR]: 'Internal Server Error',
 };
 
+const CODIGOS_POR_STATUS: Partial<Record<number, CodigoErro>> = {
+  [HttpStatus.UNAUTHORIZED]: CodigoErro.NAO_AUTENTICADO,
+  [HttpStatus.FORBIDDEN]: CodigoErro.SEM_PERMISSAO,
+  [HttpStatus.NOT_FOUND]: CodigoErro.NAO_ENCONTRADO,
+  [HttpStatus.TOO_MANY_REQUESTS]: CodigoErro.LIMITE_REQUISICOES,
+};
+
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
@@ -28,36 +35,23 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<Response>();
 
     if (exception instanceof AppException) {
-      const status: HttpStatus = exception.getStatus();
-      response.status(status).json({
-        statusCode: status,
-        error: STATUS_NAMES[status] ?? 'Error',
-        message: this.getMessage(exception),
-        code: exception.code,
-      });
+      this.responder(
+        response,
+        exception.getStatus(),
+        this.getMessage(exception),
+        exception.code,
+      );
       return;
     }
 
     if (exception instanceof HttpException) {
-      const status: HttpStatus = exception.getStatus();
-      let code: CodigoErro;
-      if (status === HttpStatus.UNAUTHORIZED) {
-        code = CodigoErro.NAO_AUTENTICADO;
-      } else if (status === HttpStatus.FORBIDDEN) {
-        code = CodigoErro.SEM_PERMISSAO;
-      } else if (status === HttpStatus.NOT_FOUND) {
-        code = CodigoErro.NAO_ENCONTRADO;
-      } else if (status === HttpStatus.TOO_MANY_REQUESTS) {
-        code = CodigoErro.LIMITE_REQUISICOES;
-      } else {
-        code = CodigoErro.VALIDACAO;
-      }
-      response.status(status).json({
-        statusCode: status,
-        error: STATUS_NAMES[status] ?? 'Error',
-        message: this.getMessage(exception),
-        code,
-      });
+      const status = exception.getStatus();
+      this.responder(
+        response,
+        status,
+        this.getMessage(exception),
+        CODIGOS_POR_STATUS[status] ?? CodigoErro.VALIDACAO,
+      );
       return;
     }
 
@@ -65,13 +59,28 @@ export class HttpExceptionFilter implements ExceptionFilter {
       `Erro inesperado: ${exception instanceof Error ? exception.message : String(exception)}`,
       exception instanceof Error ? exception.stack : undefined,
     );
-    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      error: STATUS_NAMES[HttpStatus.INTERNAL_SERVER_ERROR],
-      message: 'Erro inesperado no servidor.',
-      code: CodigoErro.ERRO_INTERNO,
+    this.responder(
+      response,
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      'Erro inesperado no servidor.',
+      CodigoErro.ERRO_INTERNO,
+    );
+  }
+
+  private responder(
+    response: Response,
+    status: HttpStatus,
+    message: string | string[],
+    code: CodigoErro,
+  ): void {
+    response.status(status).json({
+      statusCode: status,
+      error: STATUS_NAMES[status] ?? 'Error',
+      message,
+      code,
     });
   }
+
   private getMessage(exception: HttpException): string | string[] {
     const responseBody = exception.getResponse();
     if (typeof responseBody === 'string') {

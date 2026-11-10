@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   listarSolicitantes,
   criarSolicitante,
@@ -17,31 +17,53 @@ import { Botao } from "../components/ui/Botao";
 import { Cartao, Contagem } from "../components/ui/Cartao";
 import { Campo, Entrada, EntradaBusca, Selecao } from "../components/ui/Campos";
 import { Icone } from "../components/ui/Icone";
-import { Selo, type VarianteSelo } from "../components/ui/Selo";
-import { formatarTipo, pluralizar } from "../utils/formatacao";
+import { SeloAtivo, SeloTipoSolicitante } from "../components/Selos";
+import { useListagemPaginada } from "../hooks/useListagemPaginada";
+import { codigoDoErro, mensagemDoErro } from "../utils/erros";
+import { pluralizar } from "../utils/formatacao";
 
 type ModalTipo = "cadastro" | "edicao" | null;
 
-const varianteTipo: Record<TipoSolicitante, VarianteSelo> = {
-  ALUNO: "aluno",
-  PROFESSOR: "professor",
-  SERVIDOR: "servidor",
-};
-
 function GestaoSolicitantesPage() {
   const toast = useToast();
-  const [solicitantes, setSolicitantes] = useState<Solicitante[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
 
   const [buscaNome, setBuscaNome] = useState("");
   const [buscaMatricula, setBuscaMatricula] = useState("");
   const [tipo, setTipo] = useState<TipoSolicitante | "">("");
   const [ativo, setAtivo] = useState<boolean | "">("");
 
-  const [pagina, setPagina] = useState(1);
-  const [totalPaginas, setTotalPaginas] = useState(1);
-  const [total, setTotal] = useState(0);
+  const {
+    dados: solicitantes,
+    carregando,
+    erro,
+    pagina,
+    totalPaginas,
+    total,
+    carregar: carregarSolicitantes,
+    buscar,
+  } = useListagemPaginada({
+    filtros: { nome: buscaNome, matricula: buscaMatricula, tipo, ativo },
+    mensagemErro: "Erro ao carregar os solicitantes.",
+    carregar: async (paginaAtual, filtros, signal) => {
+      const resposta = await listarSolicitantes(
+        {
+          nome: filtros.nome || undefined,
+          matricula: filtros.matricula || undefined,
+          tipo: filtros.tipo || undefined,
+          ativo: filtros.ativo !== "" ? filtros.ativo : undefined,
+          page: paginaAtual,
+          limit: 10,
+        },
+        { signal },
+      );
+      return {
+        data: resposta.data,
+        page: resposta.meta.page,
+        totalPages: resposta.meta.totalPages,
+        total: resposta.meta.total,
+      };
+    },
+  });
 
   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
   const [solicitanteEmEdicao, setSolicitanteEmEdicao] = useState<Solicitante | null>(null);
@@ -58,60 +80,17 @@ function GestaoSolicitantesPage() {
   const [inativando, setInativando] = useState(false);
   const [reativando, setReativando] = useState(false);
 
-  const requisicaoRef = useRef(0);
-
-  async function carregarSolicitantes(
-    paginaAtual = pagina,
-    filtros: {
-      nome: string;
-      matricula: string;
-      tipo: TipoSolicitante | "";
-      ativo: boolean | "";
-    } = { nome: buscaNome, matricula: buscaMatricula, tipo, ativo },
-  ) {
-    const requisicao = ++requisicaoRef.current;
-    try {
-      setCarregando(true);
-      setErro("");
-      const resposta = await listarSolicitantes({
-        nome: filtros.nome || undefined,
-        matricula: filtros.matricula || undefined,
-        tipo: filtros.tipo || undefined,
-        ativo: filtros.ativo !== "" ? filtros.ativo : undefined,
-        page: paginaAtual,
-        limit: 10,
-      });
-      if (requisicao !== requisicaoRef.current) return;
-      setSolicitantes(resposta.data);
-      setPagina(resposta.meta.page);
-      setTotalPaginas(resposta.meta.totalPages);
-      setTotal(resposta.meta.total);
-    } catch (error) {
-      if (requisicao !== requisicaoRef.current) return;
-      setErro(error instanceof Error ? error.message : "Erro ao carregar os solicitantes.");
-    } finally {
-      if (requisicao === requisicaoRef.current) setCarregando(false);
-    }
-  }
-
-  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
-  useEffect(() => {
-    carregarSolicitantes(1);
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
-
-  function buscar() {
-    setPagina(1);
-    carregarSolicitantes(1);
-  }
-
   function limparFiltros() {
     setBuscaNome("");
     setBuscaMatricula("");
     setTipo("");
     setAtivo("");
-    setPagina(1);
-    carregarSolicitantes(1, { nome: "", matricula: "", tipo: "", ativo: "" });
+    void carregarSolicitantes(1, {
+      nome: "",
+      matricula: "",
+      tipo: "",
+      ativo: "",
+    });
   }
 
   function abrirModalCadastro() {
@@ -162,15 +141,17 @@ function GestaoSolicitantesPage() {
       toast.success(modalTipo === "cadastro" ? "Solicitante cadastrado com sucesso!" : "Solicitante atualizado com sucesso!");
       await carregarSolicitantes(pagina);
     } catch (error) {
-      const err = error as Error & { code?: string };
-      if (err.code === "MATRICULA_DUPLICADA") {
+      const codigo = codigoDoErro(error);
+      if (codigo === "MATRICULA_DUPLICADA") {
         setErroModal("Já existe um solicitante com essa matrícula.");
-      } else if (err.code === "IDENTIFICADOR_DUPLICADO") {
+      } else if (codigo === "IDENTIFICADOR_DUPLICADO") {
         setErroModal("Essa matrícula já pertence a um administrador cadastrado.");
-      } else if (err.code === "VALIDACAO") {
+      } else if (codigo === "VALIDACAO") {
         setErroModal("Dados inválidos. Verifique os campos informados.");
       } else {
-        setErroModal(err.message || "Não foi possível salvar o solicitante.");
+        setErroModal(
+          mensagemDoErro(error, "Não foi possível salvar o solicitante."),
+        );
       }
     } finally {
       setSalvando(false);
@@ -214,9 +195,7 @@ function GestaoSolicitantesPage() {
     {
       key: "tipo",
       titulo: "Tipo",
-      render: (s) => (
-        <Selo variante={varianteTipo[s.tipo] ?? "aluno"}>{formatarTipo(s.tipo)}</Selo>
-      ),
+      render: (s) => <SeloTipoSolicitante tipo={s.tipo} />,
     },
     { key: "matricula", titulo: "Matrícula", mono: true },
     {
@@ -227,11 +206,7 @@ function GestaoSolicitantesPage() {
     {
       key: "ativo",
       titulo: "Ativo",
-      render: (s) => (
-        <Selo variante={s.ativo ? "ativo" : "inativo"}>
-          {s.ativo ? "Ativo" : "Inativo"}
-        </Selo>
-      ),
+      render: (s) => <SeloAtivo ativo={s.ativo} />,
     },
     {
       key: "acoes",
@@ -296,7 +271,7 @@ function GestaoSolicitantesPage() {
               value={buscaNome}
               onChange={(e) => setBuscaNome(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") buscar();
+                if (e.key === "Enter") void buscar();
               }}
             />
             <EntradaBusca
@@ -305,7 +280,7 @@ function GestaoSolicitantesPage() {
               value={buscaMatricula}
               onChange={(e) => setBuscaMatricula(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") buscar();
+                if (e.key === "Enter") void buscar();
               }}
               classNameWrapper="xl:max-w-xs"
             />
@@ -315,7 +290,6 @@ function GestaoSolicitantesPage() {
               onChange={(e) => {
                 const novoTipo = e.target.value as TipoSolicitante | "";
                 setTipo(novoTipo);
-                setPagina(1);
                 void carregarSolicitantes(1, { nome: buscaNome, matricula: buscaMatricula, tipo: novoTipo, ativo });
               }}
               className="xl:w-44"
@@ -332,7 +306,6 @@ function GestaoSolicitantesPage() {
                 const valor = e.target.value;
                 const novoAtivo = valor === "" ? "" : valor === "true";
                 setAtivo(novoAtivo);
-                setPagina(1);
                 void carregarSolicitantes(1, { nome: buscaNome, matricula: buscaMatricula, tipo, ativo: novoAtivo });
               }}
               className="xl:w-48"
@@ -344,7 +317,7 @@ function GestaoSolicitantesPage() {
             <div className="flex items-center gap-2.5">
               <Botao
                 variante="primario"
-                onClick={buscar}
+                onClick={() => void buscar()}
                 icone={<Icone nome="buscar" />}
                 className="flex-1 xl:flex-none"
               >

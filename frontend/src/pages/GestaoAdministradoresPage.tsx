@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   listarAdministradores,
   criarAdministrador,
@@ -19,31 +19,53 @@ import { Botao } from "../components/ui/Botao";
 import { Cartao, Contagem } from "../components/ui/Cartao";
 import { Campo, Entrada, EntradaBusca, Selecao } from "../components/ui/Campos";
 import { Icone } from "../components/ui/Icone";
-import { Selo, type VarianteSelo } from "../components/ui/Selo";
-import { formatarPerfil, pluralizar } from "../utils/formatacao";
+import { SeloAtivo, SeloPerfil } from "../components/Selos";
+import { useListagemPaginada } from "../hooks/useListagemPaginada";
+import { codigoDoErro, mensagemDoErro } from "../utils/erros";
+import { pluralizar } from "../utils/formatacao";
 
 type ModalTipo = "cadastro" | "edicao" | null;
 
-const variantePerfil: Record<PerfilAdministrador, VarianteSelo> = {
-  ADMINISTRADOR: "administrador",
-  GESTOR: "gestor",
-  SOLICITANTE: "solicitante",
-};
-
 function GestaoAdministradoresPage() {
   const toast = useToast();
-  const [administradores, setAdministradores] = useState<Administrador[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
 
   const [buscaNome, setBuscaNome] = useState("");
   const [buscaLogin, setBuscaLogin] = useState("");
   const [perfil, setPerfil] = useState<PerfilAdministrador | "">("");
   const [ativo, setAtivo] = useState<boolean | "">("");
 
-  const [pagina, setPagina] = useState(1);
-  const [totalPaginas, setTotalPaginas] = useState(1);
-  const [total, setTotal] = useState(0);
+  const {
+    dados: administradores,
+    carregando,
+    erro,
+    pagina,
+    totalPaginas,
+    total,
+    carregar: carregarAdministradores,
+    buscar,
+  } = useListagemPaginada({
+    filtros: { nome: buscaNome, login: buscaLogin, perfil, ativo },
+    mensagemErro: "Erro ao carregar os administradores.",
+    carregar: async (paginaAtual, filtros, signal) => {
+      const resposta = await listarAdministradores(
+        {
+          nome: filtros.nome || undefined,
+          login: filtros.login || undefined,
+          perfil: filtros.perfil || undefined,
+          ativo: filtros.ativo !== "" ? filtros.ativo : undefined,
+          page: paginaAtual,
+          limit: 10,
+        },
+        { signal },
+      );
+      return {
+        data: resposta.data,
+        page: resposta.page,
+        totalPages: resposta.totalPages,
+        total: resposta.total,
+      };
+    },
+  });
 
   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
   const [administradorEmEdicao, setAdministradorEmEdicao] = useState<Administrador | null>(null);
@@ -66,60 +88,17 @@ function GestaoAdministradoresPage() {
   const [convertendo, setConvertendo] = useState(false);
   const [erroConversao, setErroConversao] = useState("");
 
-  const requisicaoRef = useRef(0);
-
-  async function carregarAdministradores(
-    paginaAtual = pagina,
-    filtros: {
-      nome: string;
-      login: string;
-      perfil: PerfilAdministrador | "";
-      ativo: boolean | "";
-    } = { nome: buscaNome, login: buscaLogin, perfil, ativo },
-  ) {
-    const requisicao = ++requisicaoRef.current;
-    try {
-      setCarregando(true);
-      setErro("");
-      const resposta = await listarAdministradores({
-        nome: filtros.nome || undefined,
-        login: filtros.login || undefined,
-        perfil: filtros.perfil || undefined,
-        ativo: filtros.ativo !== "" ? filtros.ativo : undefined,
-        page: paginaAtual,
-        limit: 10,
-      });
-      if (requisicao !== requisicaoRef.current) return;
-      setAdministradores(resposta.data);
-      setPagina(resposta.page);
-      setTotalPaginas(resposta.totalPages);
-      setTotal(resposta.total);
-    } catch (error) {
-      if (requisicao !== requisicaoRef.current) return;
-      setErro(error instanceof Error ? error.message : "Erro ao carregar os administradores.");
-    } finally {
-      if (requisicao === requisicaoRef.current) setCarregando(false);
-    }
-  }
-
-  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
-  useEffect(() => {
-    carregarAdministradores(1);
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
-
-  function buscar() {
-    setPagina(1);
-    carregarAdministradores(1);
-  }
-
   function limparFiltros() {
     setBuscaNome("");
     setBuscaLogin("");
     setPerfil("");
     setAtivo("");
-    setPagina(1);
-    carregarAdministradores(1, { nome: "", login: "", perfil: "", ativo: "" });
+    void carregarAdministradores(1, {
+      nome: "",
+      login: "",
+      perfil: "",
+      ativo: "",
+    });
   }
 
   function abrirModalCadastro() {
@@ -167,17 +146,19 @@ function GestaoAdministradoresPage() {
       toast.success(modalTipo === "cadastro" ? "Administrador cadastrado com sucesso!" : "Administrador atualizado com sucesso!");
       await carregarAdministradores(pagina);
     } catch (error) {
-      const err = error as Error & { code?: string };
-      if (err.code === "LOGIN_DUPLICADO") {
+      const codigo = codigoDoErro(error);
+      if (codigo === "LOGIN_DUPLICADO") {
         setErroModal("Já existe um administrador com esse login.");
-      } else if (err.code === "IDENTIFICADOR_DUPLICADO") {
+      } else if (codigo === "IDENTIFICADOR_DUPLICADO") {
         setErroModal("Esse login já pertence a um solicitante cadastrado.");
-      } else if (err.code === "ULTIMO_ADMINISTRADOR") {
+      } else if (codigo === "ULTIMO_ADMINISTRADOR") {
         setErroModal("Não é possível deixar o sistema sem administrador ativo. Ative ou cadastre outro administrador antes.");
-      } else if (err.code === "VALIDACAO") {
+      } else if (codigo === "VALIDACAO") {
         setErroModal("Dados inválidos. Verifique os campos informados.");
       } else {
-        setErroModal(err.message || "Não foi possível salvar o administrador.");
+        setErroModal(
+          mensagemDoErro(error, "Não foi possível salvar o administrador."),
+        );
       }
     } finally {
       setSalvando(false);
@@ -193,8 +174,7 @@ function GestaoAdministradoresPage() {
       setAdministradorParaInativar(null);
       await carregarAdministradores(pagina);
     } catch (error) {
-      const err = error as Error & { code?: string };
-      if (err.code === "ULTIMO_ADMINISTRADOR") {
+      if (codigoDoErro(error) === "ULTIMO_ADMINISTRADOR") {
         toast.error("Não é possível inativar o último administrador ativo. Ative ou cadastre outro administrador antes.");
       } else {
         toast.error("Erro ao inativar o administrador. Tente novamente.");
@@ -232,15 +212,17 @@ function GestaoAdministradoresPage() {
       fecharModalConversao();
       await carregarAdministradores(pagina);
     } catch (error) {
-      const err = error as Error & { code?: string };
-      if (err.code === "ULTIMO_ADMINISTRADOR") {
+      const codigo = codigoDoErro(error);
+      if (codigo === "ULTIMO_ADMINISTRADOR") {
         setErroConversao("Não é possível converter o último administrador ativo. Ative ou cadastre outro administrador antes.");
-      } else if (err.code === "MATRICULA_DUPLICADA") {
+      } else if (codigo === "MATRICULA_DUPLICADA") {
         setErroConversao("Já existe um solicitante com essa matrícula.");
-      } else if (err.code === "VALIDACAO") {
+      } else if (codigo === "VALIDACAO") {
         setErroConversao("Dados inválidos. Verifique os campos informados.");
       } else {
-        setErroConversao(err.message || "Não foi possível converter o administrador.");
+        setErroConversao(
+          mensagemDoErro(error, "Não foi possível converter o administrador."),
+        );
       }
     } finally {
       setConvertendo(false);
@@ -268,20 +250,12 @@ function GestaoAdministradoresPage() {
     {
       key: "perfil",
       titulo: "Perfil",
-      render: (a) => (
-        <Selo variante={variantePerfil[a.perfil] ?? "gestor"}>
-          {formatarPerfil(a.perfil)}
-        </Selo>
-      ),
+      render: (a) => <SeloPerfil perfil={a.perfil} />,
     },
     {
       key: "ativo",
       titulo: "Ativo",
-      render: (a) => (
-        <Selo variante={a.ativo ? "ativo" : "inativo"}>
-          {a.ativo ? "Ativo" : "Inativo"}
-        </Selo>
-      ),
+      render: (a) => <SeloAtivo ativo={a.ativo} />,
     },
     {
       key: "acoes",
@@ -356,7 +330,7 @@ function GestaoAdministradoresPage() {
               value={buscaNome}
               onChange={(e) => setBuscaNome(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") buscar();
+                if (e.key === "Enter") void buscar();
               }}
             />
             <EntradaBusca
@@ -365,7 +339,7 @@ function GestaoAdministradoresPage() {
               value={buscaLogin}
               onChange={(e) => setBuscaLogin(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") buscar();
+                if (e.key === "Enter") void buscar();
               }}
               classNameWrapper="xl:max-w-xs"
             />
@@ -375,7 +349,6 @@ function GestaoAdministradoresPage() {
               onChange={(e) => {
                 const novoPerfil = e.target.value as PerfilAdministrador | "";
                 setPerfil(novoPerfil);
-                setPagina(1);
                 void carregarAdministradores(1, { nome: buscaNome, login: buscaLogin, perfil: novoPerfil, ativo });
               }}
               className="xl:w-44"
@@ -391,7 +364,6 @@ function GestaoAdministradoresPage() {
                 const valor = e.target.value;
                 const novoAtivo = valor === "" ? "" : valor === "true";
                 setAtivo(novoAtivo);
-                setPagina(1);
                 void carregarAdministradores(1, { nome: buscaNome, login: buscaLogin, perfil, ativo: novoAtivo });
               }}
               className="xl:w-48"
@@ -403,7 +375,7 @@ function GestaoAdministradoresPage() {
             <div className="flex items-center gap-2.5">
               <Botao
                 variante="primario"
-                onClick={buscar}
+                onClick={() => void buscar()}
                 icone={<Icone nome="buscar" />}
                 className="flex-1 xl:flex-none"
               >

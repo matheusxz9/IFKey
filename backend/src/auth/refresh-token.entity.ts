@@ -21,7 +21,7 @@ export class RefreshToken {
   userId: number;
 
   @Column({ length: 20 })
-  userType: string; // 'admin' | 'solicitante'
+  userType: 'admin' | 'solicitante';
 
   @Column({
     name: 'familyId',
@@ -40,5 +40,5 @@ export class RefreshToken {
   revoked: boolean;
 
   @Column({ name: 'revoked_at', type: 'timestamptz', nullable: true })
-  revokedAt: Date;
+  revokedAt: Date | null;
 }

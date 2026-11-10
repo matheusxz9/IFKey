@@ -17,12 +17,16 @@ export class Chave {
   codigo: string;
 
   @Column({ length: 120, nullable: true })
-  descricao: string;
+  descricao: string | null;
 
   @Column({ length: 120, nullable: true })
-  localizacao: string;
+  localizacao: string | null;
 
-  @Column({ type: 'varchar', length: 20, default: 'DISPONIVEL' })
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: StatusChave.DISPONIVEL,
+  })
   status: StatusChave;
 
   @CreateDateColumn({ name: 'data_cadastro' })

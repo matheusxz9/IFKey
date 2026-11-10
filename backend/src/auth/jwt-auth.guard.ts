@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import type { UsuarioAutenticado } from './auth.service';
 import { SemPermissaoException } from '../common/exceptions/app.exception';
+import type { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
 
 interface RequisicaoAutenticada {
   headers: { authorization?: string };
@@ -28,12 +29,16 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Token não informado.');
     }
 
-    let payload: { sub: number; login: string; perfil: string };
+    let payload: {
+      sub: number;
+      login: string;
+      perfil: PerfilAdministrador;
+    };
     try {
       payload = this.jwtService.verify<{
         sub: number;
         login: string;
-        perfil: string;
+        perfil: PerfilAdministrador;
       }>(header.slice(7));
     } catch {
       throw new UnauthorizedException('Token inválido ou expirado.');

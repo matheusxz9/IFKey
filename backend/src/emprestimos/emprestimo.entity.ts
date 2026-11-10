@@ -26,17 +26,21 @@ export class Emprestimo {
 
   @ManyToOne(() => Administrador, (administrador) => administrador.emprestimos)
   @JoinColumn({ name: 'id_administrador_registro' })
-  administrador: Administrador;
+  administrador: Administrador | null;
 
   @CreateDateColumn({ name: 'data_hora_emprestimo', type: 'timestamptz' })
   dataHoraEmprestimo: Date;
 
   @Column({ name: 'data_hora_devolucao', type: 'timestamptz', nullable: true })
-  dataHoraDevolucao: Date;
+  dataHoraDevolucao: Date | null;
 
   @Column({ length: 255, nullable: true })
-  observacoes: string;
+  observacoes: string | null;
 
-  @Column({ type: 'varchar', length: 20, default: 'EMPRESTADA' })
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: StatusEmprestimo.EMPRESTADA,
+  })
   status: StatusEmprestimo;
 }

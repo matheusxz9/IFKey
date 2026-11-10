@@ -19,7 +19,10 @@ import { ListarSolicitantesQueryDto } from './dto/listar-solicitantes.query.dto'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-import { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
+import {
+  PERFIS_ATENDIMENTO,
+  PerfilAdministrador,
+} from '../common/enums/perfil-administrador.enum';
 
 @ApiTags('solicitantes')
 @Controller('solicitantes')
@@ -28,21 +31,13 @@ export class SolicitantesController {
   constructor(private readonly solicitantesService: SolicitantesService) {}
 
   @Get()
-  @Roles(
-    PerfilAdministrador.ADMINISTRADOR,
-    PerfilAdministrador.GESTOR,
-    PerfilAdministrador.SOLICITANTE,
-  )
+  @Roles(...PERFIS_ATENDIMENTO)
   listar(@Query() query: ListarSolicitantesQueryDto) {
     return this.solicitantesService.listar(query);
   }
 
   @Get(':id')
-  @Roles(
-    PerfilAdministrador.ADMINISTRADOR,
-    PerfilAdministrador.GESTOR,
-    PerfilAdministrador.SOLICITANTE,
-  )
+  @Roles(...PERFIS_ATENDIMENTO)
   buscar(@Param('id', ParseIntPipe) id: number) {
     return this.solicitantesService.buscar(id);
   }

@@ -14,6 +14,7 @@ import {
 } from '../common/exceptions/app.exception';
 import { Emprestimo } from '../emprestimos/emprestimo.entity';
 import { StatusEmprestimo } from '../common/enums/status-emprestimo.enum';
+import { calcularSkip, montarMeta } from '../common/paginacao';
 
 @Injectable()
 export class SolicitantesService {
@@ -45,16 +46,11 @@ export class SolicitantesService {
       qb.andWhere('s.tipo = :tipo', { tipo });
     }
     qb.orderBy('s.nome', 'ASC').addOrderBy('s.id', 'ASC');
-    qb.skip((query.page - 1) * query.limit).take(query.limit);
+    qb.skip(calcularSkip(query.page, query.limit)).take(query.limit);
     const [data, total] = await qb.getManyAndCount();
     return {
       data,
-      meta: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages: Math.ceil(total / query.limit),
-      },
+      meta: montarMeta(query.page, query.limit, total),
     };
   }
 
@@ -118,14 +114,7 @@ export class SolicitantesService {
       await this.garantirIdentificadorLivre(matricula);
     }
     if (dto.ativo === false) {
-      const temEmprestimoAtivo = await this.emprestimoRepo.exists({
-        where: { solicitante: { id }, status: StatusEmprestimo.EMPRESTADA },
-      });
-      if (temEmprestimoAtivo) {
-        throw new RecursoComEmprestimoAtivoException(
-          'Solicitante não pode ser inativado: há empréstimo ativo.',
-        );
-      }
+      await this.garantirSemEmprestimoAtivo(id);
     }
     Object.assign(solicitante, dto);
     return this.repo.save(solicitante);
@@ -133,6 +122,12 @@ export class SolicitantesService {
 
   async inativar(id: number): Promise<void> {
     const solicitante = await this.buscar(id);
+    await this.garantirSemEmprestimoAtivo(id);
+    solicitante.ativo = false;
+    await this.repo.save(solicitante);
+  }
+
+  private async garantirSemEmprestimoAtivo(id: number): Promise<void> {
     const temEmprestimoAtivo = await this.emprestimoRepo.exists({
       where: { solicitante: { id }, status: StatusEmprestimo.EMPRESTADA },
     });
@@ -141,7 +136,5 @@ export class SolicitantesService {
         'Solicitante não pode ser inativado: há empréstimo ativo.',
       );
     }
-    solicitante.ativo = false;
-    await this.repo.save(solicitante);
   }
 }

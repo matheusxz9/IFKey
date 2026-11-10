@@ -18,6 +18,9 @@ import {
 import { StatusChave } from '../common/enums/status-chave.enum';
 import { StatusEmprestimo } from '../common/enums/status-emprestimo.enum';
 import { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
+import { calcularSkip, montarMeta } from '../common/paginacao';
+
+type UsuarioEmprestimo = { id: number; perfil: PerfilAdministrador };
 
 @Injectable()
 export class EmprestimosService {
@@ -26,9 +29,12 @@ export class EmprestimosService {
     private readonly repo: Repository<Emprestimo>,
   ) {}
 
-  async criar(dto: CriarEmprestimoDto, usuarioId: number, perfil: string) {
-    const ehSolicitante =
-      (perfil as PerfilAdministrador) === PerfilAdministrador.SOLICITANTE;
+  async criar(
+    dto: CriarEmprestimoDto,
+    usuarioId: number,
+    perfil: PerfilAdministrador,
+  ) {
+    const ehSolicitante = perfil === PerfilAdministrador.SOLICITANTE;
     const solicitanteId = ehSolicitante ? usuarioId : dto.solicitanteId;
     return this.repo.manager.transaction(async (manager) => {
       const solicitanteRepo = manager.getRepository(Solicitante);
@@ -79,7 +85,7 @@ export class EmprestimosService {
   async devolver(
     id: number,
     dto: DevolverEmprestimoDto,
-    user?: { id: number; perfil: string },
+    user?: UsuarioEmprestimo,
   ) {
     return this.repo.manager.transaction(async (manager) => {
       const emprestimoRepo = manager.getRepository(Emprestimo);
@@ -97,7 +103,7 @@ export class EmprestimosService {
 
       const emprestimo = await emprestimoRepo.findOne({
         where: { id },
-        relations: { chave: true, solicitante: true },
+        relations: { chave: true, solicitante: true, administrador: true },
       });
       if (!emprestimo) {
         throw new NaoEncontradoException('Empréstimo não encontrado.');
@@ -115,9 +121,10 @@ export class EmprestimosService {
         lock: { mode: 'pessimistic_write' },
       });
 
+      const dataHoraDevolucao = new Date();
       await emprestimoRepo.update(id, {
         status: StatusEmprestimo.DEVOLVIDA,
-        dataHoraDevolucao: new Date(),
+        dataHoraDevolucao,
         ...(dto.observacoes ? { observacoes: dto.observacoes } : {}),
       });
 
@@ -125,7 +132,11 @@ export class EmprestimosService {
         status: StatusChave.DISPONIVEL,
       });
 
-      return this.toResponse(await this.buscarEntidadeComManager(manager, id));
+      emprestimo.status = StatusEmprestimo.DEVOLVIDA;
+      emprestimo.dataHoraDevolucao = dataHoraDevolucao;
+      if (dto.observacoes) emprestimo.observacoes = dto.observacoes;
+
+      return this.toResponse(emprestimo);
     });
   }
 
@@ -147,10 +158,7 @@ export class EmprestimosService {
     return emprestimo;
   }
 
-  async listar(
-    query: ListarEmprestimosQueryDto,
-    user?: { id: number; perfil: string },
-  ) {
+  async listar(query: ListarEmprestimosQueryDto, user?: UsuarioEmprestimo) {
     const solicitanteId =
       user?.perfil === PerfilAdministrador.SOLICITANTE
         ? user.id
@@ -167,23 +175,18 @@ export class EmprestimosService {
         administrador: true,
       },
       order: { dataHoraEmprestimo: 'DESC' },
-      skip: (query.page - 1) * query.limit,
+      skip: calcularSkip(query.page, query.limit),
       take: query.limit,
     });
     return {
       data: data.map((e) => this.toResponse(e)),
-      meta: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages: Math.ceil(total / query.limit),
-      },
+      meta: montarMeta(query.page, query.limit, total),
     };
   }
 
   async historico(
     query: HistoricoEmprestimosQueryDto,
-    user?: { id: number; perfil: string },
+    user?: UsuarioEmprestimo,
   ) {
     const qb = this.repo
       .createQueryBuilder('e')
@@ -224,20 +227,15 @@ export class EmprestimosService {
     if (chaveId) {
       qb.andWhere('e.chave = :chaveId', { chaveId });
     }
-    qb.skip((query.page - 1) * query.limit).take(query.limit);
+    qb.skip(calcularSkip(query.page, query.limit)).take(query.limit);
     const [data, total] = await qb.getManyAndCount();
     return {
       data: data.map((e) => this.toResponse(e)),
-      meta: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages: Math.ceil(total / query.limit),
-      },
+      meta: montarMeta(query.page, query.limit, total),
     };
   }
 
-  async buscar(id: number, user?: { id: number; perfil: string }) {
+  async buscar(id: number, user?: UsuarioEmprestimo) {
     const emprestimo = await this.buscarEntidade(id);
     this.garantirProprioEmprestimo(emprestimo, user);
     return this.toResponse(emprestimo);
@@ -245,7 +243,7 @@ export class EmprestimosService {
 
   private garantirProprioEmprestimo(
     emprestimo: Emprestimo,
-    user?: { id: number; perfil: string },
+    user?: UsuarioEmprestimo,
   ) {
     if (
       user?.perfil === PerfilAdministrador.SOLICITANTE &&

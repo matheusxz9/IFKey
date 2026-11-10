@@ -11,6 +11,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { PerfilAdministrador } from '../../common/enums/perfil-administrador.enum';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { transformarBooleano } from '../../common/dto/transformacoes';
 
 export class ListarAdministradoresQueryDto extends PaginationQueryDto {
   @Type(() => Number)
@@ -36,7 +37,7 @@ export class ListarAdministradoresQueryDto extends PaginationQueryDto {
 
   @ApiPropertyOptional({ example: true })
   @IsOptional()
-  @Transform(({ value }) => value === 'true')
+  @Transform(transformarBooleano)
   @IsBoolean()
   ativo?: boolean;
 }

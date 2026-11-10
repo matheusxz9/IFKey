@@ -1,6 +1,7 @@
 import type { TipoSolicitante } from "./solicitante";
 
-export type PerfilAdministrador = "ADMINISTRADOR" | "GESTOR" | "SOLICITANTE";
+export type PerfilSistema = "ADMINISTRADOR" | "GESTOR" | "SOLICITANTE";
+export type PerfilAdministrador = Exclude<PerfilSistema, "SOLICITANTE">;
 
 export interface Administrador {
   id: number;

@@ -1,4 +1,5 @@
 import { apiFetch, type ApiFetchOptions } from "./api";
+import { montarQueryString } from "./query";
 import type { Chave, ListaChavesResponse, StatusChave } from "../types/chave";
 
 interface ListarChavesParams {
@@ -13,31 +14,15 @@ export async function listarChaves(
   params: ListarChavesParams = {},
   options?: ApiFetchOptions,
 ): Promise<ListaChavesResponse> {
-  const query = new URLSearchParams();
+  const queryString = montarQueryString({
+    busca: params.busca,
+    status: params.status,
+    ativo: params.ativo,
+    page: params.page,
+    limit: params.limit,
+  });
 
-  if (params.busca) {
-    query.set("busca", params.busca);
-  }
-
-  if (params.status) {
-    query.set("status", params.status);
-  }
-
-  if (params.ativo !== undefined) {
-    query.set("ativo", String(params.ativo));
-  }
-
-  if (params.page) {
-    query.set("page", String(params.page));
-  }
-
-  if (params.limit) {
-    query.set("limit", String(params.limit));
-  }
-
-  const queryString = query.toString();
-
-  return apiFetch<ListaChavesResponse>(`/chaves${queryString ? `?${queryString}` : ""}`, options);
+  return apiFetch<ListaChavesResponse>(`/chaves${queryString}`, options);
 }
 
 export async function buscarChave(

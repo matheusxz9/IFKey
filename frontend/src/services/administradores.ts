@@ -1,4 +1,5 @@
 import { apiFetch, type ApiFetchOptions } from "./api";
+import { montarQueryString } from "./query";
 import type {
   Administrador,
   CriarAdministradorDto,
@@ -14,14 +15,16 @@ export const administradoresService = {
     query: ListarAdministradoresQueryDto = {},
     options?: ApiFetchOptions,
   ): Promise<PaginatedResponse<Administrador>> {
-    const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        params.append(key, String(value));
-      }
+    const queryString = montarQueryString({
+      page: query.page,
+      limit: query.limit,
+      nome: query.nome,
+      login: query.login,
+      perfil: query.perfil,
+      ativo: query.ativo,
     });
     const response = await apiFetch<PaginatedResponse<Administrador>>(
-      `/administradores?${params.toString()}`,
+      `/administradores${queryString}`,
       options,
     );
     return response;

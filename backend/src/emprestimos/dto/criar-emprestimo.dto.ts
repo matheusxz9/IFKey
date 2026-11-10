@@ -6,9 +6,7 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
-
-const trim = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() : value;
+import { transformarTrim } from '../../common/dto/transformacoes';
 
 export class CriarEmprestimoDto {
   @IsInt()
@@ -20,7 +18,7 @@ export class CriarEmprestimoDto {
   chaveId: number;
 
   @IsOptional()
-  @Transform(trim)
+  @Transform(transformarTrim)
   @IsString()
   @MaxLength(255)
   observacoes?: string;

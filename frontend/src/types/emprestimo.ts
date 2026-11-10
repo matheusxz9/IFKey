@@ -1,4 +1,5 @@
 import type { Paginacao } from "./common";
+import type { TipoSolicitante } from "./solicitante";
 
 export type StatusEmprestimo = "EMPRESTADA" | "DEVOLVIDA";
 
@@ -12,7 +13,7 @@ export interface Emprestimo {
     id: number;
     nome: string;
     matricula: string;
-    tipo: string;
+    tipo: TipoSolicitante;
   };
   chave: {
     id: number;

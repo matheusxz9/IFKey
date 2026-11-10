@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   listarChaves,
   criarChave,
@@ -17,24 +17,51 @@ import { Botao } from "../components/ui/Botao";
 import { Cartao, Contagem } from "../components/ui/Cartao";
 import { Campo, Entrada, EntradaBusca, Selecao } from "../components/ui/Campos";
 import { Icone } from "../components/ui/Icone";
-import { Selo } from "../components/ui/Selo";
+import { SeloAtivo, SeloStatusChave } from "../components/Selos";
+import { useListagemPaginada } from "../hooks/useListagemPaginada";
+import { codigoDoErro, mensagemDoErro } from "../utils/erros";
 import { pluralizar } from "../utils/formatacao";
 
 type ModalTipo = "cadastro" | "edicao" | null;
 
 function GestaoChavesPage() {
   const toast = useToast();
-  const [chaves, setChaves] = useState<Chave[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
 
   const [busca, setBusca] = useState("");
   const [status, setStatus] = useState<StatusChave | "">("");
   const [ativo, setAtivo] = useState<boolean | "">("");
 
-  const [pagina, setPagina] = useState(1);
-  const [totalPaginas, setTotalPaginas] = useState(1);
-  const [total, setTotal] = useState(0);
+  const {
+    dados: chaves,
+    carregando,
+    erro,
+    pagina,
+    totalPaginas,
+    total,
+    carregar: carregarChaves,
+    buscar,
+  } = useListagemPaginada({
+    filtros: { busca, status, ativo },
+    mensagemErro: "Erro ao carregar as chaves.",
+    carregar: async (paginaAtual, filtros, signal) => {
+      const resposta = await listarChaves(
+        {
+          busca: filtros.busca || undefined,
+          status: filtros.status || undefined,
+          ativo: filtros.ativo !== "" ? filtros.ativo : undefined,
+          page: paginaAtual,
+          limit: 10,
+        },
+        { signal },
+      );
+      return {
+        data: resposta.data,
+        page: resposta.meta.page,
+        totalPages: resposta.meta.totalPages,
+        total: resposta.meta.total,
+      };
+    },
+  });
 
   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
   const [chaveEmEdicao, setChaveEmEdicao] = useState<Chave | null>(null);
@@ -50,61 +77,11 @@ function GestaoChavesPage() {
   const [inativando, setInativando] = useState(false);
   const [reativando, setReativando] = useState(false);
 
-  const requisicaoRef = useRef(0);
-
-  async function carregarChaves(
-    paginaAtual = pagina,
-    filtros: { busca: string; status: StatusChave | ""; ativo: boolean | "" } = {
-      busca,
-      status,
-      ativo,
-    },
-  ) {
-    const requisicao = ++requisicaoRef.current;
-    try {
-      setCarregando(true);
-      setErro("");
-
-      const resposta = await listarChaves({
-        busca: filtros.busca || undefined,
-        status: filtros.status || undefined,
-        ativo: filtros.ativo !== "" ? filtros.ativo : undefined,
-        page: paginaAtual,
-        limit: 10,
-      });
-
-      if (requisicao !== requisicaoRef.current) return;
-      setChaves(resposta.data);
-      setPagina(resposta.meta.page);
-      setTotalPaginas(resposta.meta.totalPages);
-      setTotal(resposta.meta.total);
-    } catch (error) {
-      if (requisicao !== requisicaoRef.current) return;
-      setErro(
-        error instanceof Error ? error.message : "Erro ao carregar as chaves.",
-      );
-    } finally {
-      if (requisicao === requisicaoRef.current) setCarregando(false);
-    }
-  }
-
-  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
-  useEffect(() => {
-    carregarChaves(1);
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
-
-  function buscar() {
-    setPagina(1);
-    carregarChaves(1);
-  }
-
   function limparFiltros() {
     setBusca("");
     setStatus("");
     setAtivo("");
-    setPagina(1);
-    carregarChaves(1, { busca: "", status: "", ativo: "" });
+    void carregarChaves(1, { busca: "", status: "", ativo: "" });
   }
 
   function abrirModalCadastro() {
@@ -163,13 +140,13 @@ function GestaoChavesPage() {
       toast.success(modalTipo === "cadastro" ? "Chave cadastrada com sucesso!" : "Chave atualizada com sucesso!");
       await carregarChaves(pagina);
     } catch (error) {
-      const err = error as Error & { code?: string };
-      if (err.code === "CODIGO_CHAVE_DUPLICADO") {
+      const codigo = codigoDoErro(error);
+      if (codigo === "CODIGO_CHAVE_DUPLICADO") {
         setErroModal("Já existe uma chave com esse código.");
-      } else if (err.code === "VALIDACAO") {
+      } else if (codigo === "VALIDACAO") {
         setErroModal("Dados inválidos. Verifique os campos informados.");
       } else {
-        setErroModal(err.message || "Não foi possível salvar a chave.");
+        setErroModal(mensagemDoErro(error, "Não foi possível salvar a chave."));
       }
     } finally {
       setSalvando(false);
@@ -217,20 +194,12 @@ function GestaoChavesPage() {
     {
       key: "status",
       titulo: "Status",
-      render: (chave) => (
-        <Selo variante={chave.status === "DISPONIVEL" ? "disponivel" : "emprestada"}>
-          {chave.status === "DISPONIVEL" ? "Disponível" : "Emprestada"}
-        </Selo>
-      ),
+      render: (chave) => <SeloStatusChave status={chave.status} />,
     },
     {
       key: "ativo",
       titulo: "Ativo",
-      render: (chave) => (
-        <Selo variante={chave.ativo ? "ativo" : "inativo"}>
-          {chave.ativo ? "Ativo" : "Inativo"}
-        </Selo>
-      ),
+      render: (chave) => <SeloAtivo ativo={chave.ativo} />,
     },
     {
       key: "acoes",
@@ -295,7 +264,7 @@ function GestaoChavesPage() {
               value={busca}
               onChange={(event) => setBusca(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") buscar();
+                if (event.key === "Enter") void buscar();
               }}
             />
             <Selecao
@@ -304,7 +273,6 @@ function GestaoChavesPage() {
               onChange={(event) => {
                 const novoStatus = event.target.value as StatusChave | "";
                 setStatus(novoStatus);
-                setPagina(1);
                 void carregarChaves(1, { busca, status: novoStatus, ativo });
               }}
               className="xl:w-44"
@@ -320,7 +288,6 @@ function GestaoChavesPage() {
                 const valor = event.target.value;
                 const novoAtivo = valor === "" ? "" : valor === "true";
                 setAtivo(novoAtivo);
-                setPagina(1);
                 void carregarChaves(1, { busca, status, ativo: novoAtivo });
               }}
               className="xl:w-48"
@@ -332,7 +299,7 @@ function GestaoChavesPage() {
             <div className="flex items-center gap-2.5">
               <Botao
                 variante="primario"
-                onClick={buscar}
+                onClick={() => void buscar()}
                 icone={<Icone nome="buscar" />}
                 className="flex-1 xl:flex-none"
               >

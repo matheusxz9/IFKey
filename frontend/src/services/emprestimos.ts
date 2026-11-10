@@ -1,5 +1,10 @@
 import { apiFetch, type ApiFetchOptions } from "./api";
-import type { Emprestimo, ListaEmprestimosResponse } from "../types/emprestimo";
+import { montarQueryString } from "./query";
+import type {
+  Emprestimo,
+  ListaEmprestimosResponse,
+  StatusEmprestimo,
+} from "../types/emprestimo";
 
 interface CriarEmprestimoParams {
   solicitanteId: number;
@@ -8,7 +13,7 @@ interface CriarEmprestimoParams {
 }
 
 interface ListarEmprestimosParams {
-  status?: string;
+  status?: StatusEmprestimo;
   solicitanteId?: number;
   chaveId?: number;
   page?: number;
@@ -18,8 +23,8 @@ interface ListarEmprestimosParams {
 export async function criarEmprestimo(
   dados: CriarEmprestimoParams,
   options?: ApiFetchOptions,
-) {
-  return apiFetch("/emprestimos", {
+): Promise<Emprestimo> {
+  return apiFetch<Emprestimo>("/emprestimos", {
     method: "POST",
     body: JSON.stringify(dados),
     ...options,
@@ -30,32 +35,16 @@ export async function listarEmprestimos(
   params: ListarEmprestimosParams = {},
   options?: ApiFetchOptions,
 ): Promise<ListaEmprestimosResponse> {
-  const query = new URLSearchParams();
-
-  if (params.status) {
-    query.set("status", params.status);
-  }
-
-  if (params.solicitanteId) {
-    query.set("solicitanteId", String(params.solicitanteId));
-  }
-
-  if (params.chaveId) {
-    query.set("chaveId", String(params.chaveId));
-  }
-
-  if (params.page) {
-    query.set("page", String(params.page));
-  }
-
-  if (params.limit) {
-    query.set("limit", String(params.limit));
-  }
-
-  const queryString = query.toString();
+  const queryString = montarQueryString({
+    status: params.status,
+    solicitanteId: params.solicitanteId,
+    chaveId: params.chaveId,
+    page: params.page,
+    limit: params.limit,
+  });
 
   return apiFetch<ListaEmprestimosResponse>(
-    `/emprestimos${queryString ? `?${queryString}` : ""}`,
+    `/emprestimos${queryString}`,
     options,
   );
 }
@@ -88,8 +77,8 @@ export async function listarTodosEmprestimos(
 export async function devolverEmprestimo(
   id: number,
   options?: ApiFetchOptions,
-) {
-  return apiFetch(`/emprestimos/${id}/devolucao`, {
+): Promise<Emprestimo> {
+  return apiFetch<Emprestimo>(`/emprestimos/${id}/devolucao`, {
     method: "PATCH",
     ...options,
   });
@@ -108,36 +97,17 @@ export async function listarHistoricoEmprestimos(
   params: HistoricoEmprestimosParams = {},
   options?: ApiFetchOptions,
 ): Promise<ListaEmprestimosResponse> {
-  const query = new URLSearchParams();
-
-  if (params.de) {
-    query.set("de", params.de);
-  }
-
-  if (params.ate) {
-    query.set("ate", params.ate);
-  }
-
-  if (params.solicitanteId) {
-    query.set("solicitanteId", String(params.solicitanteId));
-  }
-
-  if (params.chaveId) {
-    query.set("chaveId", String(params.chaveId));
-  }
-
-  if (params.page) {
-    query.set("page", String(params.page));
-  }
-
-  if (params.limit) {
-    query.set("limit", String(params.limit));
-  }
-
-  const queryString = query.toString();
+  const queryString = montarQueryString({
+    de: params.de,
+    ate: params.ate,
+    solicitanteId: params.solicitanteId,
+    chaveId: params.chaveId,
+    page: params.page,
+    limit: params.limit,
+  });
 
   return apiFetch<ListaEmprestimosResponse>(
-    `/emprestimos/historico${queryString ? `?${queryString}` : ""}`,
+    `/emprestimos/historico${queryString}`,
     options,
   );
 }

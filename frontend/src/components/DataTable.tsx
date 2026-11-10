@@ -2,15 +2,25 @@ import type { ReactNode } from "react";
 import { cn } from "../utils/classes";
 import { EstadoVazio, EsqueletoLinhas } from "./ui/Estado";
 
-export interface Coluna<T> {
-  key: string;
+interface ColunaBase {
   titulo: string;
-  render?: (item: T) => ReactNode;
   /** Identificadores (código, matrícula, login e datas) usam a fonte mono. */
   mono?: boolean;
   /** Coluna de ações: na ficha do mobile ocupa a linha inteira. */
   acoes?: boolean;
 }
+
+type ColunaComCampo<T> = ColunaBase & {
+  key: Extract<keyof T, string>;
+  render?: undefined;
+};
+
+type ColunaComRender<T> = ColunaBase & {
+  key: string;
+  render: (item: T) => ReactNode;
+};
+
+export type Coluna<T> = ColunaComCampo<T> | ColunaComRender<T>;
 
 interface DataTableProps<T> {
   colunas: Coluna<T>[];
@@ -81,7 +91,7 @@ export default function DataTable<T extends object>({
                 >
                   {coluna.render
                     ? coluna.render(item)
-                    : String((item as Record<string, unknown>)[coluna.key] ?? "")}
+                    : String(item[coluna.key] ?? "")}
                 </td>
               ))}
             </tr>

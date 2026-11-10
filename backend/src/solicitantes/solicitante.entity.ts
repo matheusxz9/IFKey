@@ -1,5 +1,6 @@
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { Emprestimo } from '../emprestimos/emprestimo.entity';
+import { TipoSolicitante } from '../common/enums/tipo-solicitante.enum';
 
 @Entity('solicitante')
 export class Solicitante {
@@ -10,13 +11,13 @@ export class Solicitante {
   nome: string;
 
   @Column({ length: 20 })
-  tipo: string;
+  tipo: TipoSolicitante;
 
   @Column({ length: 30, unique: true })
   matricula: string;
 
   @Column({ length: 120, nullable: true })
-  contato: string;
+  contato: string | null;
 
   @Column({ default: true })
   ativo: boolean;

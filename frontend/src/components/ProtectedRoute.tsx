@@ -1,10 +1,10 @@
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth, type Perfil } from "../contexts/AuthContext";
 import { TelaCarregando } from "./ui/Estado";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: string[];
+  allowedRoles?: Perfil[];
 }
 
 export default function ProtectedRoute({
