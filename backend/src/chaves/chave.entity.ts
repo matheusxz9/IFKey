@@ -2,12 +2,14 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Emprestimo } from '../emprestimos/emprestimo.entity';
 import { StatusChave } from '../common/enums/status-chave.enum';
 
+@Index('uq_chave_codigo_ci', { synchronize: false })
 @Entity('chave')
 export class Chave {
   @PrimaryGeneratedColumn()
@@ -16,13 +18,17 @@ export class Chave {
   @Column({ length: 30, unique: true })
   codigo: string;
 
-  @Column({ length: 120, nullable: true })
-  descricao: string;
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  descricao: string | null;
 
-  @Column({ length: 120, nullable: true })
-  localizacao: string;
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  localizacao: string | null;
 
-  @Column({ type: 'varchar', length: 20, default: 'DISPONIVEL' })
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: StatusChave.DISPONIVEL,
+  })
   status: StatusChave;
 
   @CreateDateColumn({ name: 'data_cadastro' })

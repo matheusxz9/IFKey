@@ -3,13 +3,18 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { ConfigService } from '@nestjs/config';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const configService = app.get(ConfigService);
 
   app.setGlobalPrefix('api');
+  const corsOrigin =
+    configService.get<string>('CORS_ORIGIN') || 'http://localhost:5173';
   app.enableCors({
-    origin: ['http://localhost:5173'],
+    origin: corsOrigin.split(','),
     credentials: true,
   });
   const config = new DocumentBuilder()
@@ -28,7 +33,8 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  app.useBodyParser('json', { limit: '2mb' });
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(configService.get<number>('PORT') ?? 3000);
 }
 void bootstrap();

@@ -16,40 +16,75 @@ import { DevolverEmprestimoDto } from './dto/devolver-emprestimo.dto';
 import { ListarEmprestimosQueryDto } from './dto/listar-emprestimos.query.dto';
 import { HistoricoEmprestimosQueryDto } from './dto/historico-emprestimos.query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
+import type { UsuarioAutenticado } from '../auth/auth.service';
+import {
+  PERFIS_ATENDIMENTO,
+  PerfilAdministrador,
+} from '../common/enums/perfil-administrador.enum';
+import { RepassarEmprestimoDto } from './dto/repassar-emprestimo.dto';
 
 @ApiTags('emprestimos')
 @Controller('emprestimos')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class EmprestimosController {
   constructor(private readonly emprestimosService: EmprestimosService) {}
 
+  @Post(':id/repasses')
+  @Roles(PerfilAdministrador.SOLICITANTE)
+  repassar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: RepassarEmprestimoDto,
+    @CurrentUser() user: { id: number; perfil: string },
+  ) {
+    return this.emprestimosService.repassar(id, dto, user);
+  }
+
   @Post()
-  @UseGuards(JwtAuthGuard)
-  criar(@Body() dto: CriarEmprestimoDto, @CurrentUser() user: { id: number }) {
-    return this.emprestimosService.criar(dto, user.id);
+  @Roles(...PERFIS_ATENDIMENTO)
+  criar(
+    @Body() dto: CriarEmprestimoDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.emprestimosService.criar(dto, user.id, user.perfil);
   }
 
   @Patch(':id/devolucao')
-  @UseGuards(JwtAuthGuard)
+  @Roles(...PERFIS_ATENDIMENTO)
   devolver(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: DevolverEmprestimoDto,
+    @CurrentUser() user: UsuarioAutenticado,
   ) {
-    return this.emprestimosService.devolver(id, dto);
+    return this.emprestimosService.devolver(id, dto, user);
   }
 
   @Get()
-  listar(@Query() query: ListarEmprestimosQueryDto) {
-    return this.emprestimosService.listar(query);
+  @Roles(...PERFIS_ATENDIMENTO)
+  listar(
+    @Query() query: ListarEmprestimosQueryDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.emprestimosService.listar(query, user);
   }
 
   @Get('historico')
-  historico(@Query() query: HistoricoEmprestimosQueryDto) {
-    return this.emprestimosService.historico(query);
+  @Roles(...PERFIS_ATENDIMENTO)
+  historico(
+    @Query() query: HistoricoEmprestimosQueryDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.emprestimosService.historico(query, user);
   }
 
   @Get(':id')
-  buscar(@Param('id', ParseIntPipe) id: number) {
-    return this.emprestimosService.buscar(id);
+  @Roles(...PERFIS_ATENDIMENTO)
+  buscar(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.emprestimosService.buscar(id, user);
   }
 }

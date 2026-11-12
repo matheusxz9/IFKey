@@ -1,6 +1,14 @@
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Emprestimo } from '../emprestimos/emprestimo.entity';
+import { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
 
+@Index('uq_administrador_login_ci', { synchronize: false })
 @Entity('administrador')
 export class Administrador {
   @PrimaryGeneratedColumn()
@@ -12,8 +20,8 @@ export class Administrador {
   @Column({ length: 80, unique: true })
   login: string;
 
-  @Column({ length: 20 })
-  perfil: string;
+  @Column({ type: 'varchar', length: 20 })
+  perfil: PerfilAdministrador;
 
   @Column({ default: true })
   ativo: boolean;

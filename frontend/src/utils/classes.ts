@@ -1,0 +1,4 @@
+/** Junta classes condicionais sem depender de bibliotecas externas. */
+export function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}

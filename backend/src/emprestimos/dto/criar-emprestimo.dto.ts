@@ -1,4 +1,12 @@
-import { IsInt, IsOptional, IsPositive, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+  IsInt,
+  IsOptional,
+  IsPositive,
+  IsString,
+  MaxLength,
+} from 'class-validator';
+import { transformarTrim } from '../../common/dto/transformacoes';
 
 export class CriarEmprestimoDto {
   @IsInt()
@@ -10,6 +18,8 @@ export class CriarEmprestimoDto {
   chaveId: number;
 
   @IsOptional()
+  @Transform(transformarTrim)
   @IsString()
+  @MaxLength(255)
   observacoes?: string;
 }

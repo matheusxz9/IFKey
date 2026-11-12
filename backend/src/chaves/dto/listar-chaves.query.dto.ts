@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { transformarBooleano } from '../../common/dto/transformacoes';
 import { StatusChave } from '../../common/enums/status-chave.enum';
 
 export class ListarChavesQueryDto extends PaginationQueryDto {
@@ -9,7 +10,7 @@ export class ListarChavesQueryDto extends PaginationQueryDto {
   status?: StatusChave;
 
   @IsOptional()
-  @Transform(({ value }) => value === 'true')
+  @Transform(transformarBooleano)
   @IsBoolean()
   ativo?: boolean;
 
