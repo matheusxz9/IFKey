@@ -20,13 +20,27 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { UsuarioAutenticado } from '../auth/auth.service';
-import { PERFIS_ATENDIMENTO } from '../common/enums/perfil-administrador.enum';
+import {
+  PERFIS_ATENDIMENTO,
+  PerfilAdministrador,
+} from '../common/enums/perfil-administrador.enum';
+import { RepassarEmprestimoDto } from './dto/repassar-emprestimo.dto';
 
 @ApiTags('emprestimos')
 @Controller('emprestimos')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class EmprestimosController {
   constructor(private readonly emprestimosService: EmprestimosService) {}
+
+  @Post(':id/repasses')
+  @Roles(PerfilAdministrador.SOLICITANTE)
+  repassar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: RepassarEmprestimoDto,
+    @CurrentUser() user: { id: number; perfil: string },
+  ) {
+    return this.emprestimosService.repassar(id, dto, user);
+  }
 
   @Post()
   @Roles(...PERFIS_ATENDIMENTO)

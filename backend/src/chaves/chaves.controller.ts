@@ -10,8 +10,11 @@ import {
   Post,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBody, ApiConsumes } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ChavesService } from './chaves.service';
 import { CriarChaveDto } from './dto/criar-chave.dto';
 import { AtualizarChaveDto } from './dto/atualizar-chave.dto';
@@ -23,12 +26,42 @@ import {
   PERFIS_ATENDIMENTO,
   PerfilAdministrador,
 } from '../common/enums/perfil-administrador.enum';
+import { ImportarChavesDto } from './dto/importar-chaves.dto';
+import { LIMITE_BYTES_IMPORTACAO } from '../common/importacao/csv';
+import type { ArquivoCsv } from '../common/importacao/csv';
 
 @ApiTags('chaves')
 @Controller('chaves')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ChavesController {
   constructor(private readonly chavesService: ChavesService) {}
+
+  @Post('importacao/previa')
+  @HttpCode(200)
+  @Roles(PerfilAdministrador.ADMINISTRADOR, PerfilAdministrador.GESTOR)
+  @UseInterceptors(
+    FileInterceptor('arquivo', {
+      limits: { fileSize: LIMITE_BYTES_IMPORTACAO },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { arquivo: { type: 'string', format: 'binary' } },
+      required: ['arquivo'],
+    },
+  })
+  previsualizar(@UploadedFile() arquivo?: ArquivoCsv) {
+    return this.chavesService.previsualizar(arquivo);
+  }
+
+  @Post('importacao')
+  @HttpCode(200)
+  @Roles(PerfilAdministrador.ADMINISTRADOR, PerfilAdministrador.GESTOR)
+  importar(@Body() dto: ImportarChavesDto) {
+    return this.chavesService.importar(dto.linhas);
+  }
 
   @Get()
   @Roles(...PERFIS_ATENDIMENTO)

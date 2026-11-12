@@ -43,6 +43,12 @@ const colunas: Coluna<Emprestimo>[] = [
     render: (e) => (
       <>
         <p className="font-medium text-texto">{e.solicitante.nome}</p>
+        {e.responsavelAtual && e.responsavelAtual.id !== e.solicitante.id && (
+          <>
+            <p className="text-xs text-texto-medio">Com {e.responsavelAtual.nome}</p>
+            <Selo variante="repassada" className="mt-1">Repassada</Selo>
+          </>
+        )}
         <p className="mt-0.5 font-mono text-xs text-texto-fraco">
           {e.solicitante.matricula}
         </p>
@@ -59,7 +65,19 @@ const colunas: Coluna<Emprestimo>[] = [
     key: "dataHoraDevolucao",
     titulo: "Devolução",
     mono: true,
-    render: (e) => (e.dataHoraDevolucao ? formatarDataHora(e.dataHoraDevolucao) : "-"),
+    render: (e) =>
+      e.dataHoraDevolucao ? (
+        <span>
+          {formatarDataHora(e.dataHoraDevolucao)}
+          {e.devolvidoPor && (
+            <span className="block text-xs text-texto-medio">
+              por {e.devolvidoPor.nome}
+            </span>
+          )}
+        </span>
+      ) : (
+        "-"
+      ),
   },
   {
     key: "situacao",

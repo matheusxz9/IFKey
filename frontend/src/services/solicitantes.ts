@@ -5,6 +5,12 @@ import type {
   ListaSolicitantesResponse,
   TipoSolicitante,
 } from "../types/solicitante";
+import type {
+  DadosImportacaoSolicitante,
+  LinhaImportacao,
+  PreviaImportacao,
+  RelatorioImportacao,
+} from "../types/importacao";
 
 interface ListarSolicitantesParams {
   nome?: string;
@@ -63,7 +69,7 @@ interface AtualizarSolicitanteParams {
   nome?: string;
   tipo?: TipoSolicitante;
   matricula?: string;
-  contato?: string;
+  contato?: string | null;
   ativo?: boolean;
 }
 
@@ -86,6 +92,28 @@ export async function inativarSolicitante(
   return apiFetch<void>(`/solicitantes/${id}`, {
     method: "DELETE",
     ...options,
+  });
+}
+
+export function previsualizarImportacaoSolicitantes(
+  arquivo: File,
+): Promise<PreviaImportacao<DadosImportacaoSolicitante>> {
+  const body = new FormData();
+  body.append("arquivo", arquivo);
+  return apiFetch<PreviaImportacao<DadosImportacaoSolicitante>>(
+    "/solicitantes/importacao/previa",
+    { method: "POST", body },
+  );
+}
+
+export function importarSolicitantes(
+  linhas: LinhaImportacao<DadosImportacaoSolicitante>[],
+): Promise<RelatorioImportacao> {
+  return apiFetch<RelatorioImportacao>("/solicitantes/importacao", {
+    method: "POST",
+    body: JSON.stringify({
+      linhas: linhas.map(({ linha, dados }) => ({ linha, ...dados })),
+    }),
   });
 }
 

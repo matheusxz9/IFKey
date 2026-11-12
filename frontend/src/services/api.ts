@@ -213,7 +213,11 @@ export async function apiFetch<T = unknown>(
   async function enviar(token: string | null): Promise<Response> {
     const headers = new Headers(fetchOptions.headers);
 
-    if (fetchOptions.body) {
+    if (
+      fetchOptions.body &&
+      !(fetchOptions.body instanceof FormData) &&
+      !headers.has("Content-Type")
+    ) {
       headers.set("Content-Type", "application/json");
     }
 

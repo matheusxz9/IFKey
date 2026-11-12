@@ -38,7 +38,7 @@ describe('Fluxos de negócio (e2e)', () => {
 
     const dataSource = app.get(DataSource);
     await dataSource.query(
-      'TRUNCATE TABLE emprestimo, chave, solicitante, administrador, refresh_token RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE emprestimo_repasse, emprestimo, chave, solicitante, administrador, refresh_token RESTART IDENTITY CASCADE',
     );
     await dataSource.query(
       "INSERT INTO administrador (id, nome, login, perfil, ativo) VALUES (1, 'Admin Teste', 'admin.teste', 'ADMINISTRADOR', true)",
@@ -729,5 +729,724 @@ describe('Fluxos de negócio (e2e)', () => {
       .get('/api/auth/me')
       .set('Authorization', `Bearer ${tokenInativo}`)
       .expect(401);
+  });
+
+  it('rejeita identificadores duplicados sem diferenciar maiúsculas', async () => {
+    const dataSource = app.get(DataSource);
+    const sufixo = randomUUID().slice(0, 8);
+    const matricula = `case-${sufixo}`;
+    const codigo = `CASE-${sufixo}`;
+    const login = `case.login.${sufixo}`;
+
+    try {
+      await dataSource.query(
+        `INSERT INTO solicitante (nome, tipo, matricula) VALUES ('A', 'ALUNO', $1)`,
+        [matricula.toUpperCase()],
+      );
+      await expect(
+        dataSource.query(
+          `INSERT INTO solicitante (nome, tipo, matricula) VALUES ('B', 'ALUNO', $1)`,
+          [matricula.toLowerCase()],
+        ),
+      ).rejects.toMatchObject({ driverError: { code: '23505' } });
+
+      await dataSource.query(
+        `INSERT INTO chave (codigo, descricao, localizacao, status) VALUES ($1, 'A', 'A', 'DISPONIVEL')`,
+        [codigo.toUpperCase()],
+      );
+      await expect(
+        dataSource.query(
+          `INSERT INTO chave (codigo, descricao, localizacao, status) VALUES ($1, 'B', 'B', 'DISPONIVEL')`,
+          [codigo.toLowerCase()],
+        ),
+      ).rejects.toMatchObject({ driverError: { code: '23505' } });
+
+      await dataSource.query(
+        `INSERT INTO administrador (nome, login, perfil) VALUES ('A', $1, 'ADMINISTRADOR')`,
+        [login.toUpperCase()],
+      );
+      await expect(
+        dataSource.query(
+          `INSERT INTO administrador (nome, login, perfil) VALUES ('B', $1, 'ADMINISTRADOR')`,
+          [login.toLowerCase()],
+        ),
+      ).rejects.toMatchObject({ driverError: { code: '23505' } });
+    } finally {
+      await dataSource.query(
+        `DELETE FROM solicitante WHERE LOWER(matricula) = LOWER($1)`,
+        [matricula],
+      );
+      await dataSource.query(
+        `DELETE FROM chave WHERE LOWER(codigo) = LOWER($1)`,
+        [codigo],
+      );
+      await dataSource.query(
+        `DELETE FROM administrador WHERE LOWER(login) = LOWER($1)`,
+        [login],
+      );
+    }
+  });
+
+  it('prévia e confirmação de CSV preservam a revisão antes de gravar', async () => {
+    const previa = await request(server)
+      .post('/api/solicitantes/importacao/previa')
+      .set('Authorization', `Bearer ${token}`)
+      .attach(
+        'arquivo',
+        Buffer.from(
+          'nome;tipo;matricula;contato\nMaria CSV;ALUNO;CSV-101;\nErro;INVALIDO;CSV-102;',
+        ),
+        'solicitantes.csv',
+      )
+      .expect(200);
+    expect(previa.body.resumo).toEqual({ novos: 1, duplicados: 0, erros: 1 });
+    const antes = await request(server)
+      .get('/api/solicitantes?matricula=CSV-101')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(antes.body.data).toHaveLength(0);
+
+    const bloqueado = await request(server)
+      .post('/api/solicitantes/importacao')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        linhas: previa.body.linhas.map(
+          (linha: { linha: number; dados: object }) => ({
+            linha: linha.linha,
+            ...linha.dados,
+          }),
+        ),
+      })
+      .expect(200);
+    expect(bloqueado.body).toMatchObject({ criados: 0, erros: 1 });
+    const confirmado = await request(server)
+      .post('/api/solicitantes/importacao')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        linhas: [
+          {
+            linha: 2,
+            nome: 'Maria CSV',
+            tipo: 'ALUNO',
+            matricula: 'CSV-101',
+            contato: null,
+          },
+        ],
+      })
+      .expect(200);
+    expect(confirmado.body).toMatchObject({ criados: 1, erros: 0 });
+
+    const chave = await request(server)
+      .post('/api/chaves/importacao/previa')
+      .set('Authorization', `Bearer ${token}`)
+      .attach(
+        'arquivo',
+        Buffer.from('codigo;descricao;localizacao\nCSV-C1;Chave CSV;Bloco A'),
+        'chaves.csv',
+      )
+      .expect(200);
+    expect(chave.body.resumo).toEqual({ novos: 1, duplicados: 0, erros: 0 });
+    const gravada = await request(server)
+      .post('/api/chaves/importacao')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ linhas: [{ linha: 2, ...chave.body.linhas[0].dados }] })
+      .expect(200);
+    expect(gravada.body.criados).toBe(1);
+  });
+
+  it('repassa a chave e permite devolução apenas ao responsável atual', async () => {
+    const criar = (matricula: string) =>
+      request(server)
+        .post('/api/solicitantes')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          nome: matricula,
+          matricula,
+          tipo: 'ALUNO',
+          contato: `${matricula}@ifrn.br`,
+        });
+    const origem = await criar('REP-101').expect(201);
+    const destino = await criar('REP-102').expect(201);
+    const chave = await request(server)
+      .post('/api/chaves')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ codigo: 'REP-C1', descricao: 'Repasse', localizacao: 'Bloco A' })
+      .expect(201);
+    const tokenOrigem = jwt.sign(
+      { sub: origem.body.id, login: 'REP-101', perfil: 'SOLICITANTE' },
+      JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+    const tokenDestino = jwt.sign(
+      { sub: destino.body.id, login: 'REP-102', perfil: 'SOLICITANTE' },
+      JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+    const emprestimo = await request(server)
+      .post('/api/emprestimos')
+      .set('Authorization', `Bearer ${tokenOrigem}`)
+      .send({ chaveId: chave.body.id, solicitanteId: origem.body.id })
+      .expect(201);
+    const repasse = await request(server)
+      .post(`/api/emprestimos/${emprestimo.body.id}/repasses`)
+      .set('Authorization', `Bearer ${tokenOrigem}`)
+      .send({ solicitanteId: destino.body.id })
+      .expect(201);
+    expect(repasse.body.responsavelAtual.id).toBe(destino.body.id);
+    expect(repasse.body.repasses).toHaveLength(1);
+    await request(server)
+      .patch(`/api/emprestimos/${emprestimo.body.id}/devolucao`)
+      .set('Authorization', `Bearer ${tokenOrigem}`)
+      .send({})
+      .expect(403);
+    await request(server)
+      .delete(`/api/solicitantes/${destino.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(409);
+    const devolucao = await request(server)
+      .patch(`/api/emprestimos/${emprestimo.body.id}/devolucao`)
+      .set('Authorization', `Bearer ${tokenDestino}`)
+      .send({})
+      .expect(200);
+    expect(devolucao.body.devolvidoPor).toMatchObject({
+      id: destino.body.id,
+      tipo: 'SOLICITANTE',
+    });
+  });
+
+  it('prévia e commit de solicitantes tratam duplicados, erros e reimportação', async () => {
+    await request(server)
+      .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        nome: 'Já Cadastrado',
+        tipo: 'ALUNO',
+        matricula: 'CSV-DUP',
+        contato: 'dup@ifrn.br',
+      })
+      .expect(201);
+
+    const csv = [
+      'nome,tipo,matricula,contato',
+      'Novo CSV,ALUNO,CSV-NOVO,',
+      'Duplicado,ALUNO,csv-dup,dup2@ifrn.br',
+      'Inválido,ESTAGIARIO,CSV-ERR,',
+    ].join('\n');
+
+    const previa = await request(server)
+      .post('/api/solicitantes/importacao/previa')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('arquivo', Buffer.from(csv), {
+        filename: 'solicitantes.csv',
+        contentType: 'text/csv',
+      })
+      .expect(200);
+
+    expect(previa.body.resumo).toEqual({
+      novos: 1,
+      duplicados: 1,
+      erros: 1,
+    });
+    expect(
+      previa.body.linhas.map((linha: { linha: number; status: string }) => ({
+        linha: linha.linha,
+        status: linha.status,
+      })),
+    ).toEqual([
+      { linha: 2, status: 'NOVO' },
+      { linha: 3, status: 'DUPLICADO' },
+      { linha: 4, status: 'ERRO' },
+    ]);
+
+    const antes = await request(server)
+      .get('/api/solicitantes?matricula=CSV-NOVO')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(antes.body.data).toEqual([]);
+
+    const linhas = previa.body.linhas.map(
+      (linha: { linha: number; dados: object }) => ({
+        linha: linha.linha,
+        ...linha.dados,
+      }),
+    );
+    const bloqueado = await request(server)
+      .post('/api/solicitantes/importacao')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ linhas })
+      .expect(200);
+    expect(bloqueado.body).toMatchObject({
+      total: 3,
+      criados: 0,
+      ignorados: 0,
+      erros: 1,
+    });
+    expect(bloqueado.body.ocorrencias).toEqual([
+      expect.objectContaining({
+        linha: 4,
+        status: 'ERRO',
+        identificador: 'CSV-ERR',
+      }),
+    ]);
+
+    const semErro = linhas.filter(
+      (linha: { linha: number }) => linha.linha !== 4,
+    );
+    const commit = await request(server)
+      .post('/api/solicitantes/importacao')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ linhas: semErro })
+      .expect(200);
+    expect(commit.body).toMatchObject({
+      total: 2,
+      criados: 1,
+      ignorados: 1,
+      erros: 0,
+    });
+    expect(commit.body.ocorrencias).toEqual([
+      expect.objectContaining({
+        linha: 3,
+        status: 'IGNORADO',
+        identificador: 'csv-dup',
+      }),
+    ]);
+
+    const reimportacao = await request(server)
+      .post('/api/solicitantes/importacao')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ linhas: [semErro[0]] })
+      .expect(200);
+    expect(reimportacao.body).toMatchObject({
+      criados: 0,
+      ignorados: 1,
+      erros: 0,
+    });
+
+    const criado = await request(server)
+      .get('/api/solicitantes?matricula=CSV-NOVO')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(criado.body.data[0].contato).toBeNull();
+    const semContato = await request(server)
+      .patch(`/api/solicitantes/${criado.body.data[0].id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ contato: null })
+      .expect(200);
+    expect(semContato.body.contato).toBeNull();
+
+    await request(server)
+      .patch(`/api/solicitantes/${criado.body.data[0].id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ nome: '   ' })
+      .expect(400);
+  });
+
+  it('rejeita arquivos CSV inválidos e acesso de SOLICITANTE à importação', async () => {
+    const arquivosInvalidos = [
+      Buffer.alloc(0),
+      Buffer.from([0xff, 0xfe, 0x00]),
+      Buffer.from('nome;tipo\nMaria;ALUNO'),
+      Buffer.from(
+        `nome;tipo;matricula;contato\n${Array.from(
+          { length: 5001 },
+          (_, indice) => `Pessoa ${indice};ALUNO;M-${indice};`,
+        ).join('\n')}`,
+      ),
+    ];
+
+    for (const arquivo of arquivosInvalidos) {
+      const resposta = await request(server)
+        .post('/api/solicitantes/importacao/previa')
+        .set('Authorization', `Bearer ${token}`)
+        .attach('arquivo', arquivo, 'invalido.csv')
+        .expect(400);
+      expect(resposta.body.code).toBe('VALIDACAO');
+    }
+
+    await request(server)
+      .post('/api/solicitantes/importacao/previa')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('arquivo', Buffer.alloc(2 * 1024 * 1024 + 1, 0x61), 'grande.csv')
+      .expect(413);
+
+    await request(server)
+      .post('/api/solicitantes/importacao/previa')
+      .set('Authorization', `Bearer ${tokenSolicitante}`)
+      .attach(
+        'arquivo',
+        Buffer.from('nome;tipo;matricula\nX;ALUNO;X-1'),
+        'x.csv',
+      )
+      .expect(403);
+  });
+
+  it('prévia e commit de chaves ignoram código duplicado e bloqueiam erro', async () => {
+    await request(server)
+      .post('/api/chaves')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        codigo: 'CSV-CH-EXIST',
+        descricao: 'Chave existente',
+        localizacao: 'Bloco A',
+      })
+      .expect(201);
+
+    const csv = [
+      'codigo;descricao;localizacao',
+      'CSV-CH-NOVO;Nova chave;Bloco B',
+      'csv-ch-exist;Duplicada;Bloco A',
+      'CSV-CH-ERR;;Bloco C',
+    ].join('\n');
+
+    const previa = await request(server)
+      .post('/api/chaves/importacao/previa')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('arquivo', Buffer.from(csv), {
+        filename: 'chaves.csv',
+        contentType: 'text/csv',
+      })
+      .expect(200);
+
+    expect(previa.body.resumo).toEqual({
+      novos: 1,
+      duplicados: 1,
+      erros: 1,
+    });
+
+    const linhas = previa.body.linhas.map(
+      (linha: { linha: number; dados: object }) => ({
+        linha: linha.linha,
+        ...linha.dados,
+      }),
+    );
+    const bloqueado = await request(server)
+      .post('/api/chaves/importacao')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ linhas })
+      .expect(200);
+    expect(bloqueado.body).toMatchObject({
+      total: 3,
+      criados: 0,
+      ignorados: 0,
+      erros: 1,
+    });
+    expect(bloqueado.body.ocorrencias).toEqual([
+      expect.objectContaining({
+        linha: 4,
+        status: 'ERRO',
+        identificador: 'CSV-CH-ERR',
+      }),
+    ]);
+
+    const semErro = linhas.filter(
+      (linha: { linha: number }) => linha.linha !== 4,
+    );
+    const commit = await request(server)
+      .post('/api/chaves/importacao')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ linhas: semErro })
+      .expect(200);
+    expect(commit.body).toMatchObject({
+      total: 2,
+      criados: 1,
+      ignorados: 1,
+      erros: 0,
+    });
+
+    const busca = await request(server)
+      .get('/api/chaves?busca=CSV-CH-NOVO')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(busca.body.data[0]).toMatchObject({
+      codigo: 'CSV-CH-NOVO',
+      status: 'DISPONIVEL',
+    });
+  });
+
+  it('repassa responsabilidade e mantém visibilidade para os participantes', async () => {
+    const criar = (matricula: string) =>
+      request(server)
+        .post('/api/solicitantes')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          nome: `Pessoa ${matricula}`,
+          matricula,
+          tipo: 'ALUNO',
+          contato: `${matricula}@ifrn.br`,
+        });
+    const origem = await criar('REP-A').expect(201);
+    const destino = await criar('REP-B').expect(201);
+    const terceiro = await criar('REP-C').expect(201);
+    const tokenOrigem = jwt.sign(
+      { sub: origem.body.id, login: 'REP-A', perfil: 'SOLICITANTE' },
+      JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+    const tokenDestino = jwt.sign(
+      { sub: destino.body.id, login: 'REP-B', perfil: 'SOLICITANTE' },
+      JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+    const tokenTerceiro = jwt.sign(
+      { sub: terceiro.body.id, login: 'REP-C', perfil: 'SOLICITANTE' },
+      JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+    const chave = await request(server)
+      .post('/api/chaves')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        codigo: 'REP-C2',
+        descricao: 'Chave do repasse',
+        localizacao: 'Bloco B',
+      })
+      .expect(201);
+    const emprestimo = await request(server)
+      .post('/api/emprestimos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ solicitanteId: origem.body.id, chaveId: chave.body.id })
+      .expect(201);
+
+    const repasse = await request(server)
+      .post(`/api/emprestimos/${emprestimo.body.id}/repasses`)
+      .set('Authorization', `Bearer ${tokenOrigem}`)
+      .send({ solicitanteId: destino.body.id, observacoes: 'Troca de turno' })
+      .expect(201);
+    expect(repasse.body.solicitante.id).toBe(origem.body.id);
+    expect(repasse.body.responsavelAtual).toMatchObject({
+      id: destino.body.id,
+      matricula: 'REP-B',
+    });
+    expect(repasse.body.repasses).toEqual([
+      expect.objectContaining({
+        origem: expect.objectContaining({ id: origem.body.id }),
+        destino: expect.objectContaining({ id: destino.body.id }),
+        observacoes: 'Troca de turno',
+      }),
+    ]);
+
+    const chaveApos = await request(server)
+      .get(`/api/chaves/${chave.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(chaveApos.body.status).toBe('EMPRESTADA');
+
+    const ativosDestino = await request(server)
+      .get('/api/emprestimos?status=EMPRESTADA')
+      .set('Authorization', `Bearer ${tokenDestino}`)
+      .expect(200);
+    expect(
+      ativosDestino.body.data.some(
+        (item: { id: number }) => item.id === emprestimo.body.id,
+      ),
+    ).toBe(true);
+
+    await request(server)
+      .get(`/api/emprestimos/${emprestimo.body.id}`)
+      .set('Authorization', `Bearer ${tokenOrigem}`)
+      .expect(200);
+    await request(server)
+      .get(`/api/emprestimos/${emprestimo.body.id}`)
+      .set('Authorization', `Bearer ${tokenTerceiro}`)
+      .expect(403);
+
+    await request(server)
+      .patch(`/api/emprestimos/${emprestimo.body.id}/devolucao`)
+      .set('Authorization', `Bearer ${tokenOrigem}`)
+      .send({})
+      .expect(403);
+
+    const historico = await request(server)
+      .get('/api/emprestimos/historico')
+      .set('Authorization', `Bearer ${tokenOrigem}`)
+      .expect(200);
+    expect(
+      historico.body.data.some(
+        (item: { id: number }) => item.id === emprestimo.body.id,
+      ),
+    ).toBe(true);
+
+    const devolucao = await request(server)
+      .patch(`/api/emprestimos/${emprestimo.body.id}/devolucao`)
+      .set('Authorization', `Bearer ${tokenDestino}`)
+      .send({})
+      .expect(200);
+    expect(devolucao.body.devolvidoPor).toMatchObject({
+      tipo: 'SOLICITANTE',
+      id: destino.body.id,
+    });
+
+    const repasseAposDevolucao = await request(server)
+      .post(`/api/emprestimos/${emprestimo.body.id}/repasses`)
+      .set('Authorization', `Bearer ${tokenDestino}`)
+      .send({ solicitanteId: origem.body.id })
+      .expect(409);
+    expect(repasseAposDevolucao.body.code).toBe('EMPRESTIMO_JA_DEVOLVIDO');
+  });
+
+  it('bloqueia repasses inválidos', async () => {
+    const criar = (matricula: string) =>
+      request(server)
+        .post('/api/solicitantes')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          nome: `Pessoa ${matricula}`,
+          matricula,
+          tipo: 'ALUNO',
+          contato: `${matricula}@ifrn.br`,
+        });
+    const origem = await criar('REP-D').expect(201);
+    const destino = await criar('REP-E').expect(201);
+    const terceiro = await criar('REP-F').expect(201);
+    const inativo = await criar('REP-G').expect(201);
+    const tokenOrigem = jwt.sign(
+      { sub: origem.body.id, login: 'REP-D', perfil: 'SOLICITANTE' },
+      JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+    const tokenTerceiro = jwt.sign(
+      { sub: terceiro.body.id, login: 'REP-F', perfil: 'SOLICITANTE' },
+      JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+    const chave = await request(server)
+      .post('/api/chaves')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        codigo: 'REP-C3',
+        descricao: 'Chave dos repasses inválidos',
+        localizacao: 'Bloco C',
+      })
+      .expect(201);
+    const emprestimo = await request(server)
+      .post('/api/emprestimos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ solicitanteId: origem.body.id, chaveId: chave.body.id })
+      .expect(201);
+    const emprestimoId = emprestimo.body.id as number;
+    const repassar = (id: number, token: string, body: object) =>
+      request(server)
+        .post(`/api/emprestimos/${id}/repasses`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(body);
+
+    const comoAdmin = await repassar(emprestimoId, token, {
+      solicitanteId: destino.body.id,
+    }).expect(403);
+    expect(comoAdmin.body.code).toBe('SEM_PERMISSAO');
+
+    const comoTerceiro = await repassar(emprestimoId, tokenTerceiro, {
+      solicitanteId: destino.body.id,
+    }).expect(403);
+    expect(comoTerceiro.body.code).toBe('SEM_PERMISSAO');
+
+    const paraSi = await repassar(emprestimoId, tokenOrigem, {
+      solicitanteId: origem.body.id,
+    }).expect(400);
+    expect(paraSi.body.code).toBe('VALIDACAO');
+
+    await repassar(emprestimoId, tokenOrigem, {
+      solicitanteId: 999999,
+    }).expect(404);
+
+    await request(server)
+      .delete(`/api/solicitantes/${inativo.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(204);
+    const paraInativo = await repassar(emprestimoId, tokenOrigem, {
+      solicitanteId: inativo.body.id,
+    }).expect(409);
+    expect(paraInativo.body.code).toBe('SOLICITANTE_INATIVO');
+
+    await repassar(999999, tokenOrigem, {
+      solicitanteId: destino.body.id,
+    }).expect(404);
+
+    await repassar(emprestimoId, tokenOrigem, {
+      solicitanteId: destino.body.id,
+      campoExtra: true,
+    }).expect(400);
+  });
+
+  it('administrador e gestor devolvem qualquer empréstimo registrando o perfil real', async () => {
+    const solicitante = await request(server)
+      .post('/api/solicitantes')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        nome: 'Pessoa Devolução',
+        matricula: 'DEV-ADM',
+        tipo: 'ALUNO',
+        contato: 'dev-adm@ifrn.br',
+      })
+      .expect(201);
+    const criarChave = (codigo: string) =>
+      request(server)
+        .post('/api/chaves')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          codigo,
+          descricao: `Chave ${codigo}`,
+          localizacao: 'Bloco D',
+        })
+        .expect(201);
+
+    const chaveAdmin = await criarChave('DEV-C1');
+    const emprestimoAdmin = await request(server)
+      .post('/api/emprestimos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        solicitanteId: solicitante.body.id,
+        chaveId: chaveAdmin.body.id,
+      })
+      .expect(201);
+    const devolucaoAdmin = await request(server)
+      .patch(`/api/emprestimos/${emprestimoAdmin.body.id}/devolucao`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({})
+      .expect(200);
+    expect(devolucaoAdmin.body.devolvidoPor).toMatchObject({
+      tipo: 'ADMINISTRADOR',
+      id: 1,
+      nome: 'Admin Teste',
+      login: 'admin.teste',
+    });
+
+    const gestor = await request(server)
+      .post('/api/administradores')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        nome: 'Gestor Devolução',
+        login: 'gestor.devolucao',
+        perfil: 'GESTOR',
+      })
+      .expect(201);
+    const tokenGestor = jwt.sign(
+      {
+        sub: gestor.body.id,
+        login: gestor.body.login,
+        perfil: 'GESTOR',
+      },
+      JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+    const chaveGestor = await criarChave('DEV-C2');
+    const emprestimoGestor = await request(server)
+      .post('/api/emprestimos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        solicitanteId: solicitante.body.id,
+        chaveId: chaveGestor.body.id,
+      })
+      .expect(201);
+    const devolucaoGestor = await request(server)
+      .patch(`/api/emprestimos/${emprestimoGestor.body.id}/devolucao`)
+      .set('Authorization', `Bearer ${tokenGestor}`)
+      .send({})
+      .expect(200);
+    expect(devolucaoGestor.body.devolvidoPor).toMatchObject({
+      tipo: 'GESTOR',
+      id: gestor.body.id,
+      login: 'gestor.devolucao',
+    });
   });
 });

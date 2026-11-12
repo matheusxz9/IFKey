@@ -68,6 +68,12 @@ describe('EmprestimosService', () => {
       status: StatusEmprestimo.EMPRESTADA,
       chave: { id: 2 },
       solicitante: { id: 7 },
+      responsavelAtual: {
+        id: 7,
+        nome: 'Solicitante',
+        matricula: '2026001',
+        tipo: 'ALUNO',
+      },
       administrador: { id: 3, nome: 'Admin Registro' },
       observacoes: null,
       dataHoraEmprestimo: new Date('2026-01-01T10:00:00Z'),
@@ -81,7 +87,7 @@ describe('EmprestimosService', () => {
     const resultado = await service.devolver(
       1,
       {},
-      { id: 7, perfil: PerfilAdministrador.SOLICITANTE },
+      { id: 7, nome: 'Solicitante', perfil: PerfilAdministrador.SOLICITANTE },
     );
 
     expect(resultado).toMatchObject({
@@ -89,10 +95,16 @@ describe('EmprestimosService', () => {
       status: StatusEmprestimo.DEVOLVIDA,
       dataHoraDevolucao: expect.any(Date),
       administrador: { id: 3, nome: 'Admin Registro' },
+      devolvidoPor: { id: 7, nome: 'Solicitante', tipo: 'SOLICITANTE' },
     });
     expect(emprestimoManagerRepo.findOne).toHaveBeenNthCalledWith(2, {
       where: { id: 1 },
-      relations: { chave: true, solicitante: true, administrador: true },
+      relations: {
+        chave: true,
+        solicitante: true,
+        administrador: true,
+        responsavelAtual: true,
+      },
     });
     expect(emprestimoManagerRepo.update).toHaveBeenCalledWith(
       1,

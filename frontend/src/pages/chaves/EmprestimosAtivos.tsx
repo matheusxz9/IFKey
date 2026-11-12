@@ -1,12 +1,15 @@
 import { useImperativeHandle, useState, type Ref } from "react";
 import { devolverEmprestimo } from "../../services/emprestimos";
 import type { Emprestimo } from "../../types/emprestimo";
+import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import RepassarEmprestimoModal from "../../components/RepassarEmprestimoModal";
 import DataTable, { type Coluna } from "../../components/DataTable";
 import { Alerta } from "../../components/ui/Alerta";
 import { Botao } from "../../components/ui/Botao";
 import { Cartao, Contagem } from "../../components/ui/Cartao";
+import { Selo } from "../../components/ui/Selo";
 import { pluralizar } from "../../utils/formatacao";
 
 export interface EmprestimosAtivosHandle {
@@ -29,13 +32,22 @@ export default function EmprestimosAtivos({
   ref,
 }: EmprestimosAtivosProps) {
   const toast = useToast();
+  const { user, isSolicitante } = useAuth();
   const [emprestimoSelecionado, setEmprestimoSelecionado] =
+    useState<Emprestimo | null>(null);
+  const [emprestimoParaRepasse, setEmprestimoParaRepasse] =
     useState<Emprestimo | null>(null);
   const [devolvendo, setDevolvendo] = useState(false);
 
   useImperativeHandle(ref, () => ({
     solicitarDevolucao: (emprestimo) => setEmprestimoSelecionado(emprestimo),
   }));
+
+  const ehResponsavelAtual = (emprestimo: Emprestimo) =>
+    !isSolicitante || emprestimo.responsavelAtual.id === user?.id;
+
+  const podeRepassar = (emprestimo: Emprestimo) =>
+    isSolicitante && emprestimo.responsavelAtual.id === user?.id;
 
   async function confirmarDevolucao() {
     if (!emprestimoSelecionado) return;
@@ -71,24 +83,48 @@ export default function EmprestimosAtivos({
       render: (e) => e.solicitante.nome,
     },
     {
-      key: "matricula",
-      titulo: "Matrícula",
-      mono: true,
-      render: (e) => e.solicitante.matricula,
+      key: "responsavelAtual",
+      titulo: "Responsável atual",
+      render: (e) => (
+        <>
+          <p className="font-medium text-texto">{e.responsavelAtual.nome}</p>
+          <p className="mt-0.5 font-mono text-xs text-texto-fraco">
+            {e.responsavelAtual.matricula}
+          </p>
+          {e.responsavelAtual.id !== e.solicitante.id && (
+            <Selo variante="repassada" className="mt-1">
+              Repassada
+            </Selo>
+          )}
+        </>
+      ),
     },
     {
-      key: "devolver",
+      key: "acoes",
       titulo: "Ação",
       acoes: true,
       render: (e) => (
-        <Botao
-          tamanho="sm"
-          variante="secundario"
-          aria-label={`Devolver chave ${e.chave.codigo}`}
-          onClick={() => setEmprestimoSelecionado(e)}
-        >
-          Devolver
-        </Botao>
+        <div className="flex flex-wrap gap-2">
+          {ehResponsavelAtual(e) && (
+            <Botao
+              tamanho="sm"
+              variante="secundario"
+              aria-label={`Devolver chave ${e.chave.codigo}`}
+              onClick={() => setEmprestimoSelecionado(e)}
+            >
+              Devolver
+            </Botao>
+          )}
+          {podeRepassar(e) && (
+            <Botao
+              tamanho="sm"
+              aria-label={`Repassar chave ${e.chave.codigo}`}
+              onClick={() => setEmprestimoParaRepasse(e)}
+            >
+              Repassar
+            </Botao>
+          )}
+        </div>
       ),
     },
   ];
@@ -131,6 +167,15 @@ export default function EmprestimosAtivos({
         textoConfirmar="Confirmar devolução"
         carregando={devolvendo}
         variante="warning"
+      />
+
+      <RepassarEmprestimoModal
+        emprestimo={emprestimoParaRepasse}
+        aberto={!!emprestimoParaRepasse}
+        onClose={() => setEmprestimoParaRepasse(null)}
+        onRepassado={async () => {
+          await onAtualizar();
+        }}
       />
     </>
   );

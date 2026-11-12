@@ -16,6 +16,8 @@ export async function apiDe(papel: Papel): Promise<APIRequestContext> {
 
 const sufixo = () => Date.now().toString(36);
 
+let sequenciaMatricula = 0;
+
 /** Monta a rota /chaves com uma query string opcional. */
 export const caminhoChaves = (consulta = "") =>
   `${caminhoApi("/chaves")}${consulta ? `?${consulta}` : ""}`;
@@ -25,7 +27,8 @@ export const caminhoChaves = (consulta = "") =>
 export const codigoChave = (prefixo = "T") =>
   `${prefixo}-${sufixo()}`.slice(0, 20);
 
-export const matriculaUnica = () => `9${Date.now().toString().slice(-12)}`;
+export const matriculaUnica = () =>
+  `9${Date.now().toString().slice(-9)}${(sequenciaMatricula++).toString().padStart(2, "0")}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`;
 
 export const loginUnico = () => `e2e.${sufixo()}`;
 

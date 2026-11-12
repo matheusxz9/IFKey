@@ -3,6 +3,7 @@ import { listarChaves } from "../services/chaves";
 import { listarTodosEmprestimos } from "../services/emprestimos";
 import type { Chave, StatusChave } from "../types/chave";
 import type { Emprestimo } from "../types/emprestimo";
+import { useAuth } from "../contexts/AuthContext";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
@@ -20,6 +21,7 @@ import EmprestimosAtivos, {
 } from "./chaves/EmprestimosAtivos";
 
 function ChavesPage() {
+  const { user, isSolicitante } = useAuth();
   const [busca, setBusca] = useState("");
   const [status, setStatus] = useState<StatusChave | "">("");
 
@@ -92,6 +94,9 @@ function ChavesPage() {
 
   const temFiltros = Boolean(busca || status);
 
+  const ehResponsavelAtual = (emprestimo: Emprestimo) =>
+    !isSolicitante || emprestimo.responsavelAtual.id === user?.id;
+
   const colunasChaves: Coluna<Chave>[] = [
     { key: "codigo", titulo: "Código", mono: true },
     { key: "descricao", titulo: "Descrição" },
@@ -111,31 +116,33 @@ function ChavesPage() {
       acoes: true,
       render: (c) => {
         const emprestimoDaChave = emprestimos.find((e) => e.chave.id === c.id);
-        return c.status === "DISPONIVEL" ? (
-          <Botao
-            tamanho="sm"
-            variante="primario"
-            aria-label={`Emprestar chave ${c.codigo}`}
-            onClick={() => setChaveSelecionada(c)}
-          >
-            Emprestar
-          </Botao>
-        ) : (
+        if (c.status === "DISPONIVEL") {
+          return (
+            <Botao
+              tamanho="sm"
+              variante="primario"
+              aria-label={`Emprestar chave ${c.codigo}`}
+              onClick={() => setChaveSelecionada(c)}
+            >
+              Emprestar
+            </Botao>
+          );
+        }
+        return emprestimoDaChave && ehResponsavelAtual(emprestimoDaChave) ? (
           <Botao
             tamanho="sm"
             variante="secundario"
             aria-label={`Devolver chave ${c.codigo}`}
-            onClick={() => {
-              if (emprestimoDaChave) {
-                emprestimosAtivosRef.current?.solicitarDevolucao(
-                  emprestimoDaChave,
-                );
-              }
-            }}
-            disabled={!emprestimoDaChave}
+            onClick={() =>
+              emprestimosAtivosRef.current?.solicitarDevolucao(
+                emprestimoDaChave,
+              )
+            }
           >
             Devolver
           </Botao>
+        ) : (
+          <span className="text-texto-fraco">—</span>
         );
       },
     },

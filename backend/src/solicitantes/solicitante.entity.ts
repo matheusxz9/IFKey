@@ -1,7 +1,14 @@
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Emprestimo } from '../emprestimos/emprestimo.entity';
 import { TipoSolicitante } from '../common/enums/tipo-solicitante.enum';
 
+@Index('uq_solicitante_matricula_ci', { synchronize: false })
 @Entity('solicitante')
 export class Solicitante {
   @PrimaryGeneratedColumn()
@@ -16,7 +23,7 @@ export class Solicitante {
   @Column({ length: 30, unique: true })
   matricula: string;
 
-  @Column({ length: 120, nullable: true })
+  @Column({ type: 'varchar', length: 120, nullable: true })
   contato: string | null;
 
   @Column({ default: true })

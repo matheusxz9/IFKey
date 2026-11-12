@@ -103,13 +103,18 @@ Excesso de requisições (`@nestjs/throttler`), HTTP 429:
 | POST | `/solicitantes` | ADMIN, GESTOR | Cadastra solicitante |
 | PATCH | `/solicitantes/:id` | ADMIN, GESTOR | Atualiza solicitante (parcial) |
 | DELETE | `/solicitantes/:id` | ADMIN, GESTOR | Inativa solicitante (soft delete) |
+| POST | `/solicitantes/importacao/previa` | ADMIN, GESTOR | Prévia de CSV sem gravar |
+| POST | `/solicitantes/importacao` | ADMIN, GESTOR | Confirma linhas revisadas do CSV |
 | GET | `/chaves` | ADMIN, GESTOR, SOLICITANTE | Lista chaves (filtros: `status`, `ativo`, `busca`) |
 | GET | `/chaves/:id` | ADMIN, GESTOR, SOLICITANTE | Detalhe da chave |
 | POST | `/chaves` | ADMIN, GESTOR | Cadastra chave |
 | PATCH | `/chaves/:id` | ADMIN, GESTOR | Atualiza chave (parcial) |
 | DELETE | `/chaves/:id` | ADMIN, GESTOR | Inativa chave (soft delete) |
+| POST | `/chaves/importacao/previa` | ADMIN, GESTOR | Prévia de CSV sem gravar |
+| POST | `/chaves/importacao` | ADMIN, GESTOR | Confirma linhas revisadas do CSV |
 | POST | `/emprestimos` | ADMIN, GESTOR, SOLICITANTE | Registra empréstimo |
 | PATCH | `/emprestimos/:id/devolucao` | ADMIN, GESTOR, SOLICITANTE | Registra devolução |
+| POST | `/emprestimos/:id/repasses` | SOLICITANTE responsável atual | Repassa responsabilidade a outro solicitante ativo |
 | GET | `/emprestimos` | ADMIN, GESTOR, SOLICITANTE | Lista empréstimos (filtro `status`, `solicitanteId`, `chaveId`) |
 | GET | `/emprestimos/historico` | ADMIN, GESTOR, SOLICITANTE | Histórico (filtros `de`, `ate`, `solicitanteId`, `chaveId`) |
 | GET | `/emprestimos/:id` | ADMIN, GESTOR, SOLICITANTE | Detalhe do empréstimo |
@@ -127,10 +132,9 @@ Excesso de requisições (`@nestjs/throttler`), HTTP 429:
 
 > **Solicitante escopado:** quando o autenticado é `SOLICITANTE`, ele opera apenas sobre si
 > mesmo — `POST /emprestimos` ignora o `solicitanteId` enviado (usa o próprio id) e
-> `GET /emprestimos` e `GET /emprestimos/historico` retornam somente os registros dele
-> (o filtro `solicitanteId` da query é ignorado). `GET /emprestimos/:id` e
-> `PATCH /emprestimos/:id/devolucao` de empréstimo de terceiros respondem
-> `403 SEM_PERMISSAO`.
+> `GET /emprestimos` e `GET /emprestimos/historico` retornam os registros em que participou
+> (o filtro `solicitanteId` da query é ignorado). O detalhe de terceiros responde `403`;
+> a devolução exige que seja o responsável atual.
 
 > **Atenção NestJS:** declarar `GET /emprestimos/historico` **antes** de `GET /emprestimos/:id`,
 > senão `historico` é interpretado como `:id`.
@@ -220,7 +224,9 @@ Ordenação: `nome` asc.
   valor vazio após o trim → `400 VALIDACAO`.
 
 **`PATCH /solicitantes/:id`** — qualquer subconjunto de `nome`, `tipo`, `matricula`, `contato`, `ativo`.
+`contato` aceita `null` para limpar o valor (necessário para solicitantes importados sem contato).
 Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLICADA` / `IDENTIFICADOR_DUPLICADO`).
+Solicitante responsável atual por empréstimo ativo não pode ser inativado (`409 RECURSO_COM_EMPRESTIMO_ATIVO`).
 
 **`DELETE /solicitantes/:id`**
 
@@ -275,6 +281,8 @@ Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLIC
   "solicitante": { "id": 1, "nome": "Maria Silva", "matricula": "2024112345", "tipo": "ALUNO" },
   "chave": { "id": 3, "codigo": "LAB-01", "descricao": "Chave do Laboratório de Informática 1" },
   "administrador": { "id": 1, "nome": "João Souza" },
+  "responsavelAtual": { "id": 1, "nome": "Maria Silva", "matricula": "2024112345", "tipo": "ALUNO" },
+  "devolvidoPor": null,
   "dataHoraEmprestimo": "2026-09-10T14:30:00-03:00",
   "dataHoraDevolucao": null,
   "status": "EMPRESTADA",
@@ -285,6 +293,12 @@ Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLIC
 > `administrador` é quem registrou o empréstimo (extraído do JWT). Quando o próprio
 > `SOLICITANTE` registra para si não há administrador associado e o campo vem `null`
 > (`id_administrador_registro` é anulável).
+>
+> `solicitante` é sempre o solicitante original; `responsavelAtual` é quem está com a chave e
+> muda a cada repasse. `devolvidoPor` é `null` enquanto o empréstimo está ativo e, após a
+> devolução, identifica quem devolveu: `{ "tipo": "SOLICITANTE", ...solicitante }` ou
+> `{ "tipo": "ADMINISTRADOR" | "GESTOR", "id", "nome", "login" }`. `repasses` aparece apenas no
+> detalhe (`GET /emprestimos/:id`) e na resposta do repasse.
 
 **`POST /emprestimos`**
 
@@ -309,24 +323,43 @@ Ao alterar a `matricula`, valem as mesmas regras de unicidade (`MATRICULA_DUPLIC
 
 (body opcional)
 
-- `200` → empréstimo com `status = DEVOLVIDA`, `dataHoraDevolucao` = agora (servidor);
-  `chave.status` → `DISPONIVEL` na mesma transação
-- `404 NAO_ENCONTRADO` · `403 SEM_PERMISSAO` (empréstimo de terceiros, quando `SOLICITANTE`)
+- `200` → empréstimo com `status = DEVOLVIDA`, `dataHoraDevolucao` = agora (servidor),
+  `devolvidoPor` preenchido; `chave.status` → `DISPONIVEL` na mesma transação
+- `404 NAO_ENCONTRADO` · `403 SEM_PERMISSAO` (quando `SOLICITANTE` não é o responsável atual)
   · `409 EMPRESTIMO_JA_DEVOLVIDO`
 - `observacoes` tem limite de 255 caracteres e é `trim`ada
+
+**`POST /emprestimos/:id/repasses`** (apenas o `SOLICITANTE` responsável atual)
+
+```json
+{ "solicitanteId": 7, "observacoes": "Troca de turno" }
+```
+
+- `201` → detalhe atualizado com `responsavelAtual` = destinatário, `repasses` com o novo registro
+  (`origem`, `destino`, `dataHora`, `observacoes`) e `chave.status` inalterado (`EMPRESTADA`)
+- `400 VALIDACAO` (destinatário igual ao responsável atual ou corpo inválido)
+- `403 SEM_PERMISSAO` (quem não é o responsável atual; `ADMINISTRADOR`/`GESTOR` não repassam)
+- `404 NAO_ENCONTRADO` (empréstimo ou destinatário)
+- `409 SOLICITANTE_INATIVO` · `409 EMPRESTIMO_JA_DEVOLVIDO`
+
+Depois do repasse, o solicitante original continua vendo o empréstimo, mas somente o novo
+responsável pode devolvê-lo ou repassá-lo. Não há endpoint para desfazer o repasse.
 
 **`GET /emprestimos`** — filtros: `status` (`EMPRESTADA`/`DEVOLVIDA`), `solicitanteId`, `chaveId`, `page`, `limit`.
 Ordenação padrão: `dataHoraEmprestimo` desc.
 
 - Empréstimos ativos: `GET /emprestimos?status=EMPRESTADA`
+- Para `SOLICITANTE`, retorna os empréstimos em que ele é solicitante original, responsável atual
+  ou origem/destino de algum repasse; o filtro `solicitanteId` da query é ignorado.
 
 **`GET /emprestimos/historico`** — traz todos os empréstimos: primeiro os ativos (`EMPRESTADA`),
 depois os `DEVOLVIDA`; dentro de cada grupo, `dataHoraEmprestimo` desc.
 Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `dataHoraEmprestimo`),
-`solicitanteId`, `chaveId`. Para autenticado `SOLICITANTE`, retorna apenas os registros dele.
+`solicitanteId`, `chaveId`. Para autenticado `SOLICITANTE`, vale a mesma visão por participação
+de `GET /emprestimos`.
 
-**`GET /emprestimos/:id`** — detalhe · `404 NAO_ENCONTRADO` · `403 SEM_PERMISSAO`
-(empréstimo de terceiros, quando `SOLICITANTE`).
+**`GET /emprestimos/:id`** — detalhe com `responsavelAtual`, `devolvidoPor` e `repasses` ·
+`404 NAO_ENCONTRADO` · `403 SEM_PERMISSAO` (empréstimo de terceiros, quando `SOLICITANTE`).
 
 ### 5.6 Administradores
 
@@ -384,17 +417,17 @@ Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `da
 4. **Soft delete:** exclusões de chave/solicitante/administrador apenas setam `ativo = false` (histórico preservado).
 5. **Unicidade:** `chave.codigo` e `solicitante.matricula` são únicos (case-insensitive);
    `administrador.login` também é único (case-insensitive) → `LOGIN_DUPLICADO`.
-6. **Bloqueio de inativação:** chave/solicitante com empréstimo `EMPRESTADA` não pode ser inativado.
+6. **Bloqueio de inativação:** chave/solicitante com empréstimo `EMPRESTADA` não pode ser
+   inativado; no solicitante, vale também quando ele é o responsável atual por repasse.
 7. **Perfis:** `ADMINISTRADOR`/`GESTOR` gerenciam chaves e solicitantes (e `ADMINISTRADOR` também
-   administradores); empréstimo/devolução podem ser feitos por `ADMINISTRADOR`, `GESTOR` e
-   `SOLICITANTE` (este apenas para si mesmo, inclusive no detalhe e na devolução —
-   `403 SEM_PERMISSAO` em registro de terceiros).
+   administradores); empréstimo pode ser registrado por `ADMINISTRADOR`, `GESTOR` ou
+   `SOLICITANTE` (este apenas para si). A devolução é permitida a `ADMINISTRADOR`/`GESTOR` em
+   qualquer empréstimo ativo e ao `SOLICITANTE` somente quando ele é o responsável atual.
 8. **Datas coerentes:** `dataHoraDevolucao`, quando existir, nunca é anterior a `dataHoraEmprestimo`
    (constraint `CK_EMPRESTIMO_DATAS` do DER).
 9. **Solicitante escopado:** autenticado como `SOLICITANTE` cria empréstimo apenas para si,
-   vê apenas o próprio histórico (em `GET /emprestimos` e `GET /emprestimos/historico`) e só
-   lê/devolve os próprios empréstimos (`403 SEM_PERMISSAO` em `GET /emprestimos/:id` e
-   `PATCH /emprestimos/:id/devolucao` de terceiros).
+   vê os empréstimos em que participou (como solicitante original, responsável atual ou
+   origem/destino de repasse), só devolve quando é o responsável atual e só repassa nessa condição.
 10. **Unicidade entre entidades:** `solicitante.matricula` e `administrador.login` representam a
     mesma pessoa no SUAP — colisão em qualquer sentido (solicitante com matrícula igual a um login
     de administrador, ou administrador com login igual a uma matrícula de solicitante) é bloqueada
@@ -415,6 +448,7 @@ Filtros: `de`, `ate` (inclusivos; aceitam `YYYY-MM-DD` ou data ISO — sobre `da
 | 403 | Perfil sem permissão (`SEM_PERMISSAO`) ou refresh token reutilizado (`REFRESH_TOKEN_REUTILIZADO`) |
 | 404 | Recurso inexistente (`NAO_ENCONTRADO`) |
 | 409 | Conflito de estado/unicidade (ver `code` na §4) |
+| 413 | Arquivo de importação acima de 2 MB (`VALIDACAO`) |
 | 429 | Limite de requisições por IP (`LIMITE_REQUISICOES`) |
 | 500 | Erro inesperado |
 
@@ -440,11 +474,19 @@ token fora da janela de concorrência).
 | `chave.data_cadastro` | `dataCadastro` |
 | `emprestimo.id_emprestimo` | `id` |
 | `emprestimo.id_solicitante` | request: `solicitanteId` · response: `solicitante` (resumo) |
+| `emprestimo.id_responsavel_atual` | response: `responsavelAtual` (resumo) |
+| `emprestimo.id_solicitante_devolvedor` | response: `devolvidoPor` com `tipo: "SOLICITANTE"` |
+| `emprestimo.id_administrador_devolvedor` | response: `devolvidoPor` com `tipo` do perfil real |
 | `emprestimo.id_chave` | request: `chaveId` · response: `chave` (resumo) |
 | `emprestimo.id_administrador_registro` | response: `administrador` (extraído do JWT; `null` quando o próprio solicitante registra) |
 | `emprestimo.data_hora_emprestimo` | `dataHoraEmprestimo` |
 | `emprestimo.data_hora_devolucao` | `dataHoraDevolucao` |
 | `emprestimo.status` | `status` |
+| `emprestimo_repasse.id_emprestimo` | detalhe: `repasses[]` do empréstimo |
+| `emprestimo_repasse.id_solicitante_origem` | `repasses[].origem` (resumo) |
+| `emprestimo_repasse.id_solicitante_destino` | `repasses[].destino` (resumo) |
+| `emprestimo_repasse.data_hora` | `repasses[].dataHora` |
+| `emprestimo_repasse.observacoes` | `repasses[].observacoes` |
 
 ## 9. Decisões
 
@@ -458,7 +500,7 @@ token fora da janela de concorrência).
 | 6 | Prefixo global `/api` | Sim | Resolvido |
 | 7 | Campo `code` estável nos erros | Sim (§4) | Resolvido |
 | 8 | RBAC com 3 perfis (`ADMINISTRADOR`/`GESTOR`/`SOLICITANTE`) | Sim (§5.1, §6.7) | Resolvido |
-| 9 | Quem registra a devolução — [#35](https://github.com/matheusxz9/IFKey/issues/35) | Qualquer perfil autenticado (solicitante só o próprio) | Resolvido |
+| 9 | Quem registra a devolução — [#35](https://github.com/matheusxz9/IFKey/issues/35) | Responsável atual (solicitante) ou administrador/gestor; o devolvedor fica registrado | Resolvido |
 
 ## 10. Fluxos de exemplo
 
@@ -493,6 +535,18 @@ Authorization: Bearer <jwt>
 200 OK
 { "data": [ { "id": 3, "codigo": "LAB-01", "status": "DISPONIVEL", ... } ], "meta": { ... } }
 ```
+
+## 10.1 Importação CSV e repasse de responsabilidade
+
+`POST /solicitantes/importacao/previa` e `POST /chaves/importacao/previa` recebem `multipart/form-data` com campo `arquivo`. Aceitam CSV UTF-8 (com ou sem BOM) delimitado por `;` ou `,`, até 2 MB e 5.000 registros de dados, com cabeçalho. A prévia não grava. Solicitantes exigem `nome`, `tipo`, `matricula` e aceitam `contato` opcional (vazio vira `null`); chaves exigem `codigo`, `descricao`, `localizacao`.
+
+Resposta da prévia: `{ "total": 1, "resumo": { "novos": 1, "duplicados": 0, "erros": 0 }, "linhas": [{ "linha": 2, "dados": {}, "status": "NOVO", "mensagens": [] }] }`. Os status possíveis são `NOVO`, `DUPLICADO` e `ERRO`; `linha` é a linha física do arquivo (o cabeçalho é a linha 1). Erros de leitura (arquivo vazio, UTF-8 inválido, cabeçalho ausente/duplicado, mais de 5.000 registros) respondem `400 VALIDACAO`; arquivo acima de 2 MB responde `413 VALIDACAO`; perfis diferentes de `ADMINISTRADOR`/`GESTOR` respondem `403 SEM_PERMISSAO`.
+
+`POST /solicitantes/importacao` e `POST /chaves/importacao` recebem JSON `{ "linhas": [{ "linha": 2, ...campos }] }` com até 5.000 linhas. Revalidam todos os dados no servidor. Se houver `ERRO`, nada é gravado e a resposta traz `criados: 0`, `ignorados: 0` e `ocorrencias` apenas com os erros. Sem erros, os duplicados são ignorados e reportados. A resposta é `{ "total": 1, "criados": 1, "ignorados": 0, "erros": 0, "ocorrencias": [] }`. Cada ocorrência informa `linha`, `status` (`IGNORADO` ou `ERRO`), `identificador` e `mensagens`. Novas chaves entram como `DISPONIVEL`.
+
+`POST /emprestimos/:id/repasses` recebe `{ "solicitanteId": 7, "observacoes": "opcional" }` e retorna `201` com o detalhe atualizado. Apenas o solicitante responsável atual pode repassar um empréstimo ativo para outro solicitante ativo. O repasse é imediato e mantém a chave emprestada. O detalhe inclui `responsavelAtual`, `devolvidoPor` e `repasses` ordenados; as listas incluem `responsavelAtual` e `devolvidoPor`, sem o histórico completo. Solicitantes veem empréstimos dos quais participaram como solicitante original, responsável atual ou origem/destino de repasse; somente o responsável atual pode devolver. Administrador e gestor podem devolver qualquer empréstimo e o perfil real do devolvedor fica registrado.
+
+Erros do repasse: `400 VALIDACAO` para destinatário igual ao responsável ou corpo inválido; `403 SEM_PERMISSAO` para outros usuários; `404 NAO_ENCONTRADO` para empréstimo ou destinatário ausente; `409 EMPRESTIMO_JA_DEVOLVIDO` ou `409 SOLICITANTE_INATIVO` conforme o caso. Solicitante responsável por empréstimo ativo não pode ser inativado (`409 RECURSO_COM_EMPRESTIMO_ATIVO`).
 
 ## 11. Ordem de implementação sugerida
 

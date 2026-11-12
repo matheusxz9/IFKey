@@ -84,6 +84,23 @@ export async function devolverEmprestimo(
   });
 }
 
+interface RepassarEmprestimoParams {
+  solicitanteId: number;
+  observacoes?: string;
+}
+
+export function repassarEmprestimo(
+  id: number,
+  dados: RepassarEmprestimoParams,
+  options?: ApiFetchOptions,
+): Promise<Emprestimo> {
+  return apiFetch<Emprestimo>(`/emprestimos/${id}/repasses`, {
+    method: "POST",
+    body: JSON.stringify(dados),
+    ...options,
+  });
+}
+
 interface HistoricoEmprestimosParams {
   de?: string;
   ate?: string;

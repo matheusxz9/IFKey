@@ -4,11 +4,15 @@ import {
   criarSolicitante,
   atualizarSolicitante,
   inativarSolicitante,
+  previsualizarImportacaoSolicitantes,
+  importarSolicitantes,
 } from "../services/solicitantes";
 import type { Solicitante, TipoSolicitante } from "../types/solicitante";
+import type { DadosImportacaoSolicitante } from "../types/importacao";
 import { useToast } from "../contexts/ToastContext";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
+import ImportacaoCsvModal, { type CampoImportacao } from "../components/ImportacaoCsvModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DataTable, { type Coluna } from "../components/DataTable";
 import Pagination from "../components/Pagination";
@@ -23,6 +27,28 @@ import { codigoDoErro, mensagemDoErro } from "../utils/erros";
 import { pluralizar } from "../utils/formatacao";
 
 type ModalTipo = "cadastro" | "edicao" | null;
+
+const MODELO_CSV_SOLICITANTES = [
+  "nome;tipo;matricula;contato",
+  "Maria Silva;ALUNO;2024112345;maria@ifrn.edu.br",
+  "João Souza;PROFESSOR;1234567;",
+].join("\n");
+
+const CAMPOS_IMPORTACAO_SOLICITANTES: CampoImportacao[] = [
+  { chave: "nome", rotulo: "Nome", obrigatorio: true, maxLength: 120 },
+  {
+    chave: "tipo",
+    rotulo: "Tipo",
+    obrigatorio: true,
+    opcoes: [
+      { valor: "ALUNO", rotulo: "Aluno" },
+      { valor: "PROFESSOR", rotulo: "Professor" },
+      { valor: "SERVIDOR", rotulo: "Servidor" },
+    ],
+  },
+  { chave: "matricula", rotulo: "Matrícula", obrigatorio: true, maxLength: 30 },
+  { chave: "contato", rotulo: "Contato", maxLength: 120 },
+];
 
 function GestaoSolicitantesPage() {
   const toast = useToast();
@@ -66,6 +92,7 @@ function GestaoSolicitantesPage() {
   });
 
   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
+  const [importacaoAberta, setImportacaoAberta] = useState(false);
   const [solicitanteEmEdicao, setSolicitanteEmEdicao] = useState<Solicitante | null>(null);
 
   const [nome, setNome] = useState("");
@@ -109,7 +136,7 @@ function GestaoSolicitantesPage() {
     setNome(solicitante.nome);
     setTipoForm(solicitante.tipo);
     setMatricula(solicitante.matricula);
-    setContato(solicitante.contato);
+    setContato(solicitante.contato ?? "");
     setErroModal("");
   }
 
@@ -125,7 +152,11 @@ function GestaoSolicitantesPage() {
   }
 
   async function confirmarSalvar() {
-    if (!nome.trim() || !matricula.trim() || !contato.trim()) {
+    if (
+      !nome.trim() ||
+      !matricula.trim() ||
+      (modalTipo === "cadastro" && !contato.trim())
+    ) {
       setErroModal("Preencha todos os campos.");
       return;
     }
@@ -135,7 +166,12 @@ function GestaoSolicitantesPage() {
       if (modalTipo === "cadastro") {
         await criarSolicitante({ nome: nome.trim(), tipo: tipoForm, matricula: matricula.trim(), contato: contato.trim() });
       } else if (modalTipo === "edicao" && solicitanteEmEdicao) {
-        await atualizarSolicitante(solicitanteEmEdicao.id, { nome: nome.trim(), tipo: tipoForm, matricula: matricula.trim(), contato: contato.trim() });
+        await atualizarSolicitante(solicitanteEmEdicao.id, {
+          nome: nome.trim(),
+          tipo: tipoForm,
+          matricula: matricula.trim(),
+          contato: contato.trim() || null,
+        });
       }
       fecharModal();
       toast.success(modalTipo === "cadastro" ? "Solicitante cadastrado com sucesso!" : "Solicitante atualizado com sucesso!");
@@ -201,7 +237,7 @@ function GestaoSolicitantesPage() {
     {
       key: "contato",
       titulo: "Contato",
-      render: (s) => <span className="text-texto-medio">{s.contato}</span>,
+      render: (s) => <span className="text-texto-medio">{s.contato ?? "—"}</span>,
     },
     {
       key: "ativo",
@@ -254,6 +290,7 @@ function GestaoSolicitantesPage() {
           titulo="Gestão de solicitantes"
           subtitulo="Cadastre, edite e gerencie os solicitantes de chaves."
         >
+          <Botao variante="secundario" onClick={() => setImportacaoAberta(true)}>Importar CSV</Botao>
           <Botao
             variante="primario"
             onClick={abrirModalCadastro}
@@ -357,6 +394,25 @@ function GestaoSolicitantesPage() {
           />
         </Cartao>
       </div>
+
+      <ImportacaoCsvModal<DadosImportacaoSolicitante>
+        aberto={importacaoAberta}
+        titulo="Importar solicitantes"
+        descricao="Use a matrícula do SUAP; o contato é opcional. Nada será gravado antes da aprovação."
+        nomeArquivoModelo="modelo-solicitantes.csv"
+        conteudoModelo={MODELO_CSV_SOLICITANTES}
+        campos={CAMPOS_IMPORTACAO_SOLICITANTES}
+        campoIdentificador="matricula"
+        previsualizar={previsualizarImportacaoSolicitantes}
+        importar={importarSolicitantes}
+        onFechar={() => setImportacaoAberta(false)}
+        onImportado={(relatorio) => {
+          const partes = [`${relatorio.criados} criado(s)`];
+          if (relatorio.ignorados > 0) partes.push(`${relatorio.ignorados} ignorado(s)`);
+          toast.success(`Importação concluída: ${partes.join(", ")}.`);
+          if (relatorio.criados > 0) void carregarSolicitantes(1);
+        }}
+      />
 
       <Modal
         aberto={!!modalTipo}
