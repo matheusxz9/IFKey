@@ -4,3 +4,7 @@ test-results/
 playwright-report/
 blob-report/
 frontend/tests/.auth/
+.agents/
+.github/
+.superpowers/
+skills-lock.json
