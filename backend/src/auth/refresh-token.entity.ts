@@ -20,7 +20,7 @@ export class RefreshToken {
   @Column({ type: 'int' })
   userId: number;
 
-  @Column({ length: 20 })
+  @Column({ type: 'varchar', length: 20 })
   userType: 'admin' | 'solicitante';
 
   @Column({

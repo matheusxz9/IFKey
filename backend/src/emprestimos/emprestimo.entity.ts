@@ -51,7 +51,7 @@ export class Emprestimo {
   @Column({ name: 'data_hora_devolucao', type: 'timestamptz', nullable: true })
   dataHoraDevolucao: Date | null;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   observacoes: string | null;
 
   @Column({

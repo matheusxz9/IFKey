@@ -18,10 +18,10 @@ export class Chave {
   @Column({ length: 30, unique: true })
   codigo: string;
 
-  @Column({ length: 120, nullable: true })
+  @Column({ type: 'varchar', length: 120, nullable: true })
   descricao: string | null;
 
-  @Column({ length: 120, nullable: true })
+  @Column({ type: 'varchar', length: 120, nullable: true })
   localizacao: string | null;
 
   @Column({

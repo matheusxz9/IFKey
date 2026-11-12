@@ -20,7 +20,7 @@ export class Administrador {
   @Column({ length: 80, unique: true })
   login: string;
 
-  @Column({ length: 20 })
+  @Column({ type: 'varchar', length: 20 })
   perfil: PerfilAdministrador;
 
   @Column({ default: true })

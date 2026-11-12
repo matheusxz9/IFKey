@@ -17,7 +17,7 @@ export class Solicitante {
   @Column({ length: 120 })
   nome: string;
 
-  @Column({ length: 20 })
+  @Column({ type: 'varchar', length: 20 })
   tipo: TipoSolicitante;
 
   @Column({ length: 30, unique: true })
