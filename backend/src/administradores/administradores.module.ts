@@ -5,10 +5,11 @@ import { AdministradoresService } from './administradores.service';
 import { Administrador } from './administrador.entity';
 import { Solicitante } from '../solicitantes/solicitante.entity';
 import { AuthModule } from '../auth/auth.module';
+import { DemoReadOnlyGuard } from '../auth/demo-readonly.guard';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Administrador, Solicitante]), AuthModule],
   controllers: [AdministradoresController],
-  providers: [AdministradoresService],
+  providers: [AdministradoresService, DemoReadOnlyGuard],
 })
 export class AdministradoresModule {}

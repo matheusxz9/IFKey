@@ -25,6 +25,8 @@ Variáveis de ambiente configuradas no Render:
 - `SUAP_CLIENT_ID`, `SUAP_CLIENT_SECRET`
 - `SUAP_REDIRECT_URI=https://ifkey.vercel.app/login/suap/callback`
 - `THROTTLE_TTL`, `THROTTLE_LIMIT`
+- `DEMO_LOGIN_ENABLED`, `DEMO_ADMIN_PASSWORD`, `DEMO_GESTOR_PASSWORD`,
+  `DEMO_SOLICITANTE_PASSWORD` (apenas durante a demonstração)
 
 ## Frontend — Vercel
 
@@ -38,6 +40,7 @@ Variáveis de ambiente (Production e Preview):
 - `VITE_API_URL=https://ifkey-api.onrender.com/api`
 - `VITE_CLIENT_ID` (mesmo client ID do SUAP usado no backend)
 - `VITE_REDIRECT_URI=https://ifkey.vercel.app/login/suap/callback`
+- `VITE_DEMO_LOGIN_ENABLED=true` (apenas durante a demonstração)
 
 ## Banco — Render Postgres
 
@@ -67,6 +70,34 @@ npm run admin:add -- <login-do-suap> "<Nome Completo>"
 ```
 
 O login precisa ser o identificador que o SUAP devolve (matrícula ou usuário).
+
+## Login de demonstração
+
+Para avaliação sem compartilhar contas do SUAP, o backend expõe `POST /auth/demo` e o frontend
+mostra um formulário de acesso de demonstração. A migration `SeedDemo` cria os perfis
+`demo.admin`, `demo.gestor` e `demo.solicitante` e dados de exemplo (solicitantes, chaves e
+empréstimos). Nada disso depende do SUAP.
+
+No Render, configure:
+
+- `DEMO_LOGIN_ENABLED=true`
+- `DEMO_ADMIN_PASSWORD`, `DEMO_GESTOR_PASSWORD`, `DEMO_SOLICITANTE_PASSWORD` com senhas próprias
+  da demonstração (diferentes das contas reais)
+
+Na Vercel, configure `VITE_DEMO_LOGIN_ENABLED=true` e gere um novo deploy (a variável é embutida no
+build).
+
+Para encerrar o acesso após a apresentação:
+
+1. No Render, mude `DEMO_LOGIN_ENABLED` para `false`. Tokens e refresh tokens demo passam a ser
+   recusados imediatamente.
+2. Na Vercel, mude `VITE_DEMO_LOGIN_ENABLED` para `false` e gere um novo deploy para esconder o
+   formulário.
+3. Opcionalmente, inative os perfis demo no banco (o recurso de demonstração já fica bloqueado
+   pela flag).
+
+As senhas de demonstração não devem ser versionadas; mantenha-as apenas no Render e no formulário
+entregue à avaliação.
 
 ## Limitações do plano free
 

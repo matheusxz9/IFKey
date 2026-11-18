@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, LessThan, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -12,6 +13,17 @@ import {
   SemPermissaoException,
 } from '../common/exceptions/app.exception';
 import { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
+
+const PERFIS_DEMO = {
+  'demo.admin': { tipo: 'admin', chaveSenha: 'DEMO_ADMIN_PASSWORD' },
+  'demo.gestor': { tipo: 'admin', chaveSenha: 'DEMO_GESTOR_PASSWORD' },
+  'demo.solicitante': {
+    tipo: 'solicitante',
+    chaveSenha: 'DEMO_SOLICITANTE_PASSWORD',
+  },
+} as const;
+
+type LoginDemo = keyof typeof PERFIS_DEMO;
 
 export interface UsuarioAutenticado {
   id: number;
@@ -61,6 +73,7 @@ export class AuthService {
   constructor(
     private readonly suapService: SuapService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
     @InjectRepository(Administrador)
     private readonly adminRepo: Repository<Administrador>,
     @InjectRepository(Solicitante)
@@ -142,6 +155,86 @@ export class AuthService {
     );
     throw new SemPermissaoException(
       'Usuário não está cadastrado como administrador ou solicitante ativo.',
+    );
+  }
+
+  private demoHabilitado(): boolean {
+    return (
+      this.configService
+        .get<string>('DEMO_LOGIN_ENABLED', 'false')
+        .toLowerCase() === 'true'
+    );
+  }
+
+  private ehLoginDemo(login: string): boolean {
+    return login.toLowerCase().startsWith('demo.');
+  }
+
+  private senhasIguais(informada: string, esperada: string): boolean {
+    const hash = (valor: string) =>
+      crypto.createHash('sha256').update(valor).digest();
+    return crypto.timingSafeEqual(hash(informada), hash(esperada));
+  }
+
+  async loginDemo(login: string, senha: string): Promise<TokensAutenticacao> {
+    if (!this.demoHabilitado()) {
+      throw new NotFoundException('Login de demonstração indisponível.');
+    }
+
+    const loginNormalizado = login.trim().toLowerCase();
+    const perfilDemo = PERFIS_DEMO[loginNormalizado as LoginDemo];
+
+    if (!perfilDemo) {
+      throw new SemPermissaoException('Credenciais de demonstração inválidas.');
+    }
+
+    const senhaEsperada = this.configService.get<string>(
+      perfilDemo.chaveSenha,
+      '',
+    );
+    if (!senhaEsperada || !this.senhasIguais(senha, senhaEsperada)) {
+      this.logger.warn(`Login demo recusado: ${loginNormalizado}`);
+      throw new SemPermissaoException('Credenciais de demonstração inválidas.');
+    }
+
+    if (perfilDemo.tipo === 'admin') {
+      const admin = await this.adminRepo.findOne({
+        where: { login: loginNormalizado, ativo: true },
+      });
+      if (!admin) {
+        this.logger.error(`Perfil demo não encontrado: ${loginNormalizado}`);
+        throw new SemPermissaoException(
+          'Credenciais de demonstração inválidas.',
+        );
+      }
+      this.logger.log(
+        `Login demo OK (admin): ${admin.login} (admin id ${admin.id})`,
+      );
+      return this.generateTokens(
+        admin.id,
+        admin.login,
+        admin.perfil,
+        'admin',
+        admin.nome,
+      );
+    }
+
+    const solicitante = await this.solicitanteRepo.findOne({
+      where: { matricula: loginNormalizado, ativo: true },
+    });
+    if (!solicitante) {
+      this.logger.error(`Perfil demo não encontrado: ${loginNormalizado}`);
+      throw new SemPermissaoException('Credenciais de demonstração inválidas.');
+    }
+    this.logger.log(
+      `Login demo OK (solicitante): ${solicitante.matricula} (solicitante id ${solicitante.id})`,
+    );
+    return this.generateTokens(
+      solicitante.id,
+      solicitante.matricula,
+      PerfilAdministrador.SOLICITANTE,
+      'solicitante',
+      solicitante.nome,
     );
   }
 
@@ -270,6 +363,9 @@ export class AuthService {
         .getRepository(Administrador)
         .findOne({ where: { id: stored.userId, ativo: true } });
       if (!admin) return null;
+      if (this.ehLoginDemo(admin.login) && !this.demoHabilitado()) {
+        return null;
+      }
       return {
         id: admin.id,
         nome: admin.nome,
@@ -283,6 +379,9 @@ export class AuthService {
       .getRepository(Solicitante)
       .findOne({ where: { id: stored.userId, ativo: true } });
     if (!solicitante) return null;
+    if (this.ehLoginDemo(solicitante.matricula) && !this.demoHabilitado()) {
+      return null;
+    }
     return {
       id: solicitante.id,
       nome: solicitante.nome,
@@ -350,6 +449,9 @@ export class AuthService {
       if (!solicitante || !solicitante.ativo) {
         throw new SemPermissaoException();
       }
+      if (this.ehLoginDemo(solicitante.matricula) && !this.demoHabilitado()) {
+        throw new SemPermissaoException();
+      }
       return {
         id: solicitante.id,
         nome: solicitante.nome,
@@ -360,6 +462,9 @@ export class AuthService {
     }
     const admin = await this.adminRepo.findOne({ where: { id: userId } });
     if (!admin || !admin.ativo) {
+      throw new SemPermissaoException();
+    }
+    if (this.ehLoginDemo(admin.login) && !this.demoHabilitado()) {
       throw new SemPermissaoException();
     }
     return {

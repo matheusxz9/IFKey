@@ -19,6 +19,7 @@ import { ConverterSolicitanteDto } from './dto/converter-solicitante.dto';
 import { ListarAdministradoresQueryDto } from './dto/listar-administradores.query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
+import { DemoReadOnlyGuard } from '../auth/demo-readonly.guard';
 import { Roles } from '../auth/roles.decorator';
 import { PerfilAdministrador } from '../common/enums/perfil-administrador.enum';
 
@@ -43,12 +44,14 @@ export class AdministradoresController {
   }
 
   @Post()
+  @UseGuards(DemoReadOnlyGuard)
   @Roles(PerfilAdministrador.ADMINISTRADOR)
   criar(@Body() dto: CriarAdministradorDto) {
     return this.administradoresService.criar(dto);
   }
 
   @Post(':id/converter-solicitante')
+  @UseGuards(DemoReadOnlyGuard)
   @Roles(PerfilAdministrador.ADMINISTRADOR)
   converterEmSolicitante(
     @Param('id', ParseIntPipe) id: number,
@@ -58,6 +61,7 @@ export class AdministradoresController {
   }
 
   @Patch(':id')
+  @UseGuards(DemoReadOnlyGuard)
   @Roles(PerfilAdministrador.ADMINISTRADOR)
   atualizar(
     @Param('id', ParseIntPipe) id: number,
@@ -68,6 +72,7 @@ export class AdministradoresController {
 
   @Delete(':id')
   @HttpCode(204)
+  @UseGuards(DemoReadOnlyGuard)
   @Roles(PerfilAdministrador.ADMINISTRADOR)
   inativar(@Param('id', ParseIntPipe) id: number) {
     return this.administradoresService.inativar(id);

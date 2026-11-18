@@ -169,6 +169,27 @@ POST /auth/suap
   (solicitante ativo). Sem cadastro ativo correspondente → `403 SEM_PERMISSAO`.
 - O `login` do administrador corresponde ao usuário do SUAP (`identificacao`, normalmente a parte
   antes do `@`); `matricula` é o número retornado pelo SUAP.
+
+```http
+POST /auth/demo
+{ "login": "demo.admin", "senha": "<senha configurada no servidor>" }
+```
+
+`200 OK` → mesmo formato de `POST /auth/suap` (access token, refresh token e `user`).
+
+- Acesso de demonstração para avaliação, independente do SUAP. Perfis disponíveis: `demo.admin`
+  (`ADMINISTRADOR`), `demo.gestor` (`GESTOR`) e `demo.solicitante` (`SOLICITANTE`).
+- As senhas vêm das variáveis `DEMO_ADMIN_PASSWORD`, `DEMO_GESTOR_PASSWORD` e
+  `DEMO_SOLICITANTE_PASSWORD`; o recurso só existe com `DEMO_LOGIN_ENABLED=true`.
+- Desabilitado → `404 NAO_ENCONTRADO`. Credenciais inválidas, perfil demo ausente ou inativo →
+  `403 SEM_PERMISSAO`. Body ausente/inválido → `400 VALIDACAO`.
+- Enquanto o recurso está desabilitado, tokens e refresh tokens de perfis demo também são
+  recusados.
+- Contas demo não podem criar, atualizar, converter ou inativar administradores
+  (`403 SEM_PERMISSAO`).
+- Os perfis e dados de exemplo são criados pela migration `SeedDemo`; o frontend só exibe o
+  formulário com `VITE_DEMO_LOGIN_ENABLED=true`.
+
 - `POST /auth/refresh` (público, `200 OK`) — body `{ "refreshToken": "<token>" }` → novo par
   `{ accessToken, refreshToken, user }`. O token é rotativo: o refresh apresentado é **revogado** e
   o novo token pertence à mesma **família** de sessão. Token inválido/expirado →

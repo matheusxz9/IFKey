@@ -13,6 +13,7 @@ import { AuthService } from './auth.service';
 import type { UsuarioAutenticado } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
+import { LoginDemoDto } from './dto/login-demo.dto';
 import { LoginSuapDto } from './dto/login-suap.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 
@@ -25,6 +26,12 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginSuapDto) {
     return this.authService.loginSuap(dto.code);
+  }
+
+  @Post('demo')
+  @HttpCode(HttpStatus.OK)
+  loginDemo(@Body() dto: LoginDemoDto) {
+    return this.authService.loginDemo(dto.login, dto.senha);
   }
 
   @Post('refresh')

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { SuapService } from './suap.service';
 import { Administrador } from '../administradores/administrador.entity';
@@ -31,6 +32,7 @@ describe('AuthService.loginSuap', () => {
         AuthService,
         { provide: SuapService, useValue: suapService },
         { provide: JwtService, useValue: jwtService },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
         { provide: getRepositoryToken(Administrador), useValue: adminRepo },
         { provide: getRepositoryToken(Solicitante), useValue: solicitanteRepo },
         {
@@ -239,6 +241,7 @@ describe('AuthService.refreshTokens', () => {
           useValue: { trocarCodePorToken: jest.fn(), buscarUsuario: jest.fn() },
         },
         { provide: JwtService, useValue: jwtService },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
         { provide: getRepositoryToken(Administrador), useValue: adminRepo },
         { provide: getRepositoryToken(Solicitante), useValue: solicitanteRepo },
         {
