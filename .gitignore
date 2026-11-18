@@ -1,5 +1,6 @@
 node_modules/
 .env
+.vercel/
 test-results/
 playwright-report/
 blob-report/
@@ -8,3 +9,4 @@ frontend/tests/.auth/
 .github/
 .superpowers/
 skills-lock.json
+.env.local
